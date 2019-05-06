@@ -46,6 +46,40 @@ def gen_conv(x, cnum, ksize, stride=1, rate=1, name='conv',
     return x
 
 
+#https://github.com/JiahuiYu/generative_inpainting/issues/62#issuecomment-398552261
+@add_arg_scope
+def gated_conv(x, cnum, ksize, stride=1, rate=1, name='conv',
+             padding='SAME', activation=tf.nn.elu, training=True):
+    """Define conv for generator.
+
+    Args:
+        x: Input.
+        cnum: Channel number for each feature and gating convolution.
+        ksize: Kernel size.
+        Stride: Convolution stride.
+        Rate: Rate for or dilated conv.
+        name: Name of layers.
+        padding: Default to SYMMETRIC.
+        activation: Activation function after convolution.
+        training: If current graph is for training or inference, used for bn.
+
+    Returns:
+        tf.Tensor: output
+
+    """
+    assert padding in ['SYMMETRIC', 'SAME', 'REFELECT']
+    if padding == 'SYMMETRIC' or padding == 'REFELECT':
+        p = int(rate*(ksize-1)/2)
+        x = tf.pad(x, [[0,0], [p, p], [p, p], [0,0]], mode=padding)
+        padding = 'VALID'
+    x = tf.layers.conv2d(
+        x, 2 * cnum, ksize, stride, dilation_rate=rate, #Double the cnum, because of split later
+        padding=padding, name=name + '_feature_gating') #here no activation, see paper
+    x1,x2 = tf.split(x,num_or_size_splits=2,axis=3,name=name + '_split')
+    x = tf.math.multiply(tf.math.sigmoid(x2),activation(x1),name=name)
+    return x
+
+
 @add_arg_scope
 def gen_deconv(x, cnum, name='upsample', padding='SAME', training=True):
     """Define deconv for generator.
