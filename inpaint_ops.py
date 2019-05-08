@@ -76,9 +76,34 @@ def gated_conv(x, cnum, ksize, stride=1, rate=1, name='conv',
         x, 2 * cnum, ksize, stride, dilation_rate=rate, #Double the cnum, because of split later
         padding=padding, name=name + '_feature_gating') #here no activation, see paper
     x1,x2 = tf.split(x,num_or_size_splits=2,axis=3,name=name + '_split')
-    x = tf.math.multiply(tf.math.sigmoid(x2),activation(x1),name=name)
+    if activation != None:
+        x = tf.math.multiply(tf.math.sigmoid(x2),activation(x1),name=name)
+    else:
+        x = tf.math.multiply(tf.math.sigmoid(x2),x1,name=name)
     return x
 
+@add_arg_scope
+def gated_deconv(x, cnum, name='upsample', padding='SAME', training=True):
+    """Define deconv for generator.
+    The deconv is defined to be a x2 resize_nearest_neighbor operation with
+    additional gen_conv operation.
+
+    Args:
+        x: Input.
+        cnum: Channel number.
+        name: Name of layers.
+        training: If current graph is for training or inference, used for bn.
+
+    Returns:
+        tf.Tensor: output
+
+    """
+    with tf.variable_scope(name):
+        x = resize(x, func=tf.image.resize_nearest_neighbor)
+        x = gated_conv(
+            x, cnum, 3, 1, name=name+'_conv', padding=padding,
+            training=training)
+    return x
 
 @add_arg_scope
 def gen_deconv(x, cnum, name='upsample', padding='SAME', training=True):
@@ -123,6 +148,27 @@ def dis_conv(x, cnum, ksize=5, stride=2, name='conv', training=True):
     """
     x = tf.layers.conv2d(x, cnum, ksize, stride, 'SAME', name=name)
     x = tf.nn.leaky_relu(x)
+    return x
+
+#https://github.com/pfnet-research/sngan_projection/blob/master/source/links/sn_convolution_2d.py
+@add_arg_scope
+def sn_conv(x, cnum, ksize=5, stride=2, name='conv', training=True):
+    """Define conv for discriminator.
+    Activation is set to leaky_relu.
+
+    Args:
+        x: Input.
+        cnum: Channel number.
+        ksize: Kernel size.
+        Stride: Convolution stride.
+        name: Name of layers.
+        training: If current graph is for training or inference, used for bn.
+
+    Returns:
+        tf.Tensor: output
+    """
+    conv = SNConvolution2D(x, cnum, ksize, stride,  name, training,dilation=1, padding='SAME', Ip=1)
+    x = conv.conv()
     return x
 
 

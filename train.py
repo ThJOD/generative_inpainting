@@ -16,10 +16,10 @@ def multigpu_graph_def(model, data, config, gpu_id=0, loss_type='g'):
     with tf.device('/cpu:0'):
         images = data.data_pipeline(config.BATCH_SIZE)
     if gpu_id == 0 and loss_type == 'g':
-        _, _, losses = model.build_graph_with_losses(
+        _, _, losses = model.build_graph_with_losses_gated(
             images, config, summary=True, reuse=True)
     else:
-        _, _, losses = model.build_graph_with_losses(
+        _, _, losses = model.build_graph_with_losses_gated(
             images, config, reuse=True)
     if loss_type == 'g':
         return losses['g_loss']
@@ -31,10 +31,10 @@ def multigpu_graph_def(model, data, config, gpu_id=0, loss_type='g'):
 
 if __name__ == "__main__":
     config = ng.Config('inpaint.yml')
-    if config.GPU_ID != -1:
-        ng.set_gpus(config.GPU_ID)
-    else:
-        ng.get_gpus(config.NUM_GPUS)
+    #if config.GPU_ID != -1:
+    #    ng.set_gpus(config.GPU_ID)
+    #else:
+    #    ng.get_gpus(config.NUM_GPUS)
     # training data
     with open(config.DATA_FLIST[config.DATASET][0]) as f:
         fnames = f.read().splitlines()
@@ -43,7 +43,8 @@ if __name__ == "__main__":
     images = data.data_pipeline(config.BATCH_SIZE)
     # main model
     model = InpaintCAModel()
-    g_vars, d_vars, losses = model.build_graph_with_losses(
+    #g_vars, d_vars, losses = model.build_graph_with_losses(
+    g_vars, d_vars, losses = model.build_graph_with_losses_gated(
         images, config=config)
     # validation images
     if config.VAL:
