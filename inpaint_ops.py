@@ -10,6 +10,7 @@ from neuralgym.ops.layers import *
 from neuralgym.ops.loss_ops import *
 from neuralgym.ops.summary_ops import *
 
+from SNConvolution import SNConvolution2D
 
 logger = logging.getLogger()
 np.random.seed(2018)
@@ -167,8 +168,9 @@ def sn_conv(x, cnum, ksize=5, stride=2, name='conv', training=True):
     Returns:
         tf.Tensor: output
     """
-    conv = SNConvolution2D(x, cnum, ksize, stride,  name, training,dilation=1, padding='SAME', Ip=1)
+    conv = SNConvolution2D(x, cnum, ksize, stride,  (1,1,1,1), name, training, 'SAME', 1)
     x = conv.conv()
+    x = tf.nn.leaky_relu(x)
     return x
 
 
@@ -225,6 +227,45 @@ def bbox2mask(bbox, config, name='mask'):
             [bbox, height, width,
              config.MAX_DELTA_HEIGHT, config.MAX_DELTA_WIDTH],
             tf.float32, stateful=False)
+        mask.set_shape([1] + [height, width] + [1])
+    return mask
+
+def strokeMask(config, name='mask'):
+    def generateMask(height, width, maxVertex, maxLength, maxBushWidth, maxAngle, numMasks= 4, mask=None):
+        if mask is None:
+            mask = np.zeros((height, width), np.float32)
+        for i in range(numMasks):
+            numVertex = np.random.randint(1,maxVertex)
+            startX = np.random.randint(0,width - 1)
+            startY = np.random.randint(0,height - 1)
+            for i in range(numVertex):
+                angle = np.random.uniform(0.0,maxAngle)
+                if( i % 2 == 0):
+                    angle = 2 * np.pi - angle
+                length = np.random.uniform(0.0,maxLength)
+                brushWidth = np.random.randint(1,maxBushWidth)
+                #print(type(np.floor(startX + length * np.sin(angle))))
+                cv2.line(mask,(startX,startY),(int(np.floor(startX + length * np.sin(angle))),int(np.floor(startY + length * np.cos(angle)))),1,brushWidth)
+                startX = int(np.floor(startX + length * np.sin(angle)))
+                startY = int(np.floor(startY + length * np.cos(angle)))
+                cv2.circle(mask,(startX,startY),int(brushWidth / 2.0),1)
+                if np.random.randint(0,2):
+                    mask = cv2.flip( mask, 0 )
+                if np.random.randint(0,2):
+                    mask = cv2.flip( mask, 1 )
+        mask = mask.reshape(1,height,width,1)
+        return mask
+    with tf.variable_scope(name), tf.device('/cpu:0'):
+        img_shape = config.IMG_SHAPES
+        maxVertex = config.MAX_VERTEX
+        maxLength = config.MAX_LENGTH
+        maxBushWidth = config.MAX_BUSH_WIDTH
+        maxAngle = config.MAX_ANGLE
+        numMasks = config.NUM_STROKES
+        height = img_shape[0]
+        width = img_shape[1]
+        mask = tf.py_function(generateMask,[height, width, maxVertex,maxLength,maxBushWidth,maxAngle,numMasks],tf.float32)
+        #mask = generateMask(height, width, maxVertex,maxLength,maxBushWidth,maxAngle,numMasks)
         mask.set_shape([1] + [height, width] + [1])
     return mask
 

@@ -13,10 +13,11 @@ from neuralgym.ops.layers import flatten, resize
 from neuralgym.ops.gan_ops import gan_wgan_loss, gradients_penalty
 from neuralgym.ops.gan_ops import random_interpolates
 
-from inpaint_ops import gated_conv, gen_deconv, dis_conv, gen_conv,gated_deconv
-from inpaint_ops import random_bbox, bbox2mask, local_patch
+from inpaint_ops import gated_conv, gen_deconv, dis_conv, gen_conv,gated_deconv, sn_conv
+from inpaint_ops import random_bbox, bbox2mask, local_patch,strokeMask
 from inpaint_ops import spatial_discounting_mask
 from inpaint_ops import resize_mask_like, contextual_attention
+from gan_loss import gan_sn_patch_gan_loss
 
 
 logger = logging.getLogger()
@@ -148,8 +149,7 @@ class InpaintCAModel(Model):
             x = gated_conv(x, 2*cnum, 3, 1, name='conv14')
             x = gated_deconv(x, cnum, name='conv15_upsample')
             x = gated_conv(x, cnum//2, 3, 1, name='conv16')
-            x = gated_conv(x, 3, 3, 1, activation=None, name='conv17')
-            x = tf.clip_by_value(x, -1., 1.)
+            x = gen_conv(x, 3, 3, 1, activation=tf.nn.tanh, name='conv17')
             x_stage1 = x
             # return x_stage1, None, None
 
@@ -190,8 +190,8 @@ class InpaintCAModel(Model):
             x = gated_conv(x, 2*cnum, 3, 1, name='allconv14')
             x = gated_deconv(x, cnum, name='allconv15_upsample')
             x = gated_conv(x, cnum//2, 3, 1, name='allconv16')
-            x = gated_conv(x, 3, 3, 1, activation=None, name='allconv17')
-            x_stage2 = tf.clip_by_value(x, -1., 1.)
+            x = gen_conv(x, 3, 3, 1, activation=tf.nn.tanh, name='allconv17')
+            x_stage2 = x
         return x_stage1, x_stage2, offset_flow
 
     def build_wgan_local_discriminator(self, x, reuse=False, training=True):
@@ -228,12 +228,13 @@ class InpaintCAModel(Model):
     def build_SNPatchGan_discriminator(self, x, reuse=False, training=True):
         with tf.variable_scope('discriminator', reuse=reuse):
             cnum = 64
-            x =  sn_conv(x, cnum, ksize=5, stride=1, name='conv1', training=training)
-            x =  sn_conv(x, cnum * 2, ksize=5, stride=2, name='conv1', training=training)
-            x =  sn_conv(x, cnum * 4, ksize=5, stride=2, name='conv1', training=training)
-            x =  sn_conv(x, cnum * 4, ksize=5, stride=2, name='conv1', training=training)
-            x =  sn_conv(x, cnum * 4, ksize=5, stride=2, name='conv1', training=training)
-            x =  sn_conv(x, cnum * 4, ksize=5, stride=2, name='conv1', training=training)
+            x =  sn_conv(x, cnum, ksize=5, stride=(1,1,1,1), name='conv1', training=training)
+            x =  sn_conv(x, cnum * 2, ksize=5, stride=(1,2,2,1), name='conv2', training=training)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv3', training=training)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv4', training=training)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv5', training=training)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv6', training=training)
+            x =  tf.reduce_mean(x,[1,2,3]) #reducing for each image to one NHWC so reduces HWC
             return x
             
 
@@ -284,6 +285,8 @@ class InpaintCAModel(Model):
                 'raw_incomplete_predicted_complete', config.VIZ_MAX_OUT)
 
         # gan
+        #Why are batch and predicted batch concatenated??? I do not see where the discriminator seperates it
+        #It is because it is basically one big patch and each image is run through the discriminator anyway. Afterwards the results for all the images are separated
         batch_pos_neg = tf.concat([batch_pos, batch_complete], axis=0)
         # local deterministic patch
         local_patch_batch_pos_neg = tf.concat([local_patch_batch_pos, local_patch_batch_complete], 0)
@@ -349,8 +352,7 @@ class InpaintCAModel(Model):
                                 summary=False, reuse=False):
         batch_pos = batch_data / 127.5 - 1.
         # generate mask, 1 represents masked point
-        bbox = random_bbox(config)
-        mask = bbox2mask(bbox, config, name='mask_c')
+        mask = strokeMask(config, name='mask_c')
         batch_incomplete = batch_pos*(1.-mask)
         x1, x2, offset_flow = self.build_inpaint_net_gated(
             batch_incomplete, mask, config, reuse=reuse, training=training,
@@ -364,24 +366,10 @@ class InpaintCAModel(Model):
         losses = {}
         # apply mask and complete image
         batch_complete = batch_predicted*mask + batch_incomplete*(1.-mask)
-        # local patches
-        local_patch_batch_pos = local_patch(batch_pos, bbox)
-        local_patch_batch_predicted = local_patch(batch_predicted, bbox)
-        local_patch_x1 = local_patch(x1, bbox)
-        local_patch_x2 = local_patch(x2, bbox)
-        local_patch_batch_complete = local_patch(batch_complete, bbox)
-        local_patch_mask = local_patch(mask, bbox)
-        l1_alpha = config.COARSE_L1_ALPHA
-        losses['l1_loss'] = l1_alpha * tf.reduce_mean(tf.abs(local_patch_batch_pos - local_patch_x1)*spatial_discounting_mask(config))
-        if not config.PRETRAIN_COARSE_NETWORK:
-            losses['l1_loss'] += tf.reduce_mean(tf.abs(local_patch_batch_pos - local_patch_x2)*spatial_discounting_mask(config))
-        losses['ae_loss'] = l1_alpha * tf.reduce_mean(tf.abs(batch_pos - x1) * (1.-mask))
-        if not config.PRETRAIN_COARSE_NETWORK:
-            losses['ae_loss'] += tf.reduce_mean(tf.abs(batch_pos - x2) * (1.-mask))
-        losses['ae_loss'] /= tf.reduce_mean(1.-mask)
+        #Now l1_loss is just an l1_loss over the whole image
+        losses['l1_loss'] = tf.reduce_mean(tf.abs(batch_pos - batch_complete))
         if summary:
             scalar_summary('losses/l1_loss', losses['l1_loss'])
-            scalar_summary('losses/ae_loss', losses['ae_loss'])
             viz_img = [batch_pos, batch_incomplete, batch_complete]
             if offset_flow is not None:
                 viz_img.append(
@@ -393,40 +381,19 @@ class InpaintCAModel(Model):
 
         # gan
         batch_pos_neg = tf.concat([batch_pos, batch_complete], axis=0)
-        # local deterministic patch
-        local_patch_batch_pos_neg = tf.concat([local_patch_batch_pos, local_patch_batch_complete], 0)
-        if config.GAN_WITH_MASK:
-            batch_pos_neg = tf.concat([batch_pos_neg, tf.tile(mask, [config.BATCH_SIZE*2, 1, 1, 1])], axis=3)
         # wgan with gradient penalty
-        if config.GAN == 'wgan_gp':
+        if config.GAN == 'SN_PatchGAN':
             # seperate gan
-            pos_neg_local, pos_neg_global = self.build_wgan_discriminator(local_patch_batch_pos_neg, batch_pos_neg, training=training, reuse=reuse)
-            pos_local, neg_local = tf.split(pos_neg_local, 2)
+            pos_neg_global = self.build_SNPatchGan_discriminator(batch_pos_neg, training=training, reuse=reuse)
             pos_global, neg_global = tf.split(pos_neg_global, 2)
-            # wgan loss
-            g_loss_local, d_loss_local = gan_wgan_loss(pos_local, neg_local, name='gan/local_gan')
-            g_loss_global, d_loss_global = gan_wgan_loss(pos_global, neg_global, name='gan/global_gan')
-            losses['g_loss'] = config.GLOBAL_WGAN_LOSS_ALPHA * g_loss_global + g_loss_local
-            losses['d_loss'] = d_loss_global + d_loss_local
-            # gp
-            interpolates_local = random_interpolates(local_patch_batch_pos, local_patch_batch_complete)
-            interpolates_global = random_interpolates(batch_pos, batch_complete)
-            dout_local, dout_global = self.build_wgan_discriminator(
-                interpolates_local, interpolates_global, reuse=True)
-            # apply penalty
-            penalty_local = gradients_penalty(interpolates_local, dout_local, mask=local_patch_mask)
-            penalty_global = gradients_penalty(interpolates_global, dout_global, mask=mask)
-            losses['gp_loss'] = config.WGAN_GP_LAMBDA * (penalty_local + penalty_global)
-            losses['d_loss'] = losses['d_loss'] + losses['gp_loss']
+            # SN_PatchGAN loss
+            g_loss_global, d_loss_global = gan_sn_patch_gan_loss(pos_global, neg_global, name='gan/global_gan')
+            losses['g_loss'] = g_loss_global + losses['l1_loss']
+            losses['d_loss'] = d_loss_global
             if summary and not config.PRETRAIN_COARSE_NETWORK:
-                gradients_summary(g_loss_local, batch_predicted, name='g_loss_local')
                 gradients_summary(g_loss_global, batch_predicted, name='g_loss_global')
                 scalar_summary('convergence/d_loss', losses['d_loss'])
-                scalar_summary('convergence/local_d_loss', d_loss_local)
                 scalar_summary('convergence/global_d_loss', d_loss_global)
-                scalar_summary('gan_wgan_loss/gp_loss', losses['gp_loss'])
-                scalar_summary('gan_wgan_loss/gp_penalty_local', penalty_local)
-                scalar_summary('gan_wgan_loss/gp_penalty_global', penalty_global)
 
         if summary and not config.PRETRAIN_COARSE_NETWORK:
             # summary the magnitude of gradients from different losses w.r.t. predicted image
@@ -435,18 +402,6 @@ class InpaintCAModel(Model):
             gradients_summary(losses['g_loss'], x2, name='g_loss_to_x2')
             gradients_summary(losses['l1_loss'], x1, name='l1_loss_to_x1')
             gradients_summary(losses['l1_loss'], x2, name='l1_loss_to_x2')
-            gradients_summary(losses['ae_loss'], x1, name='ae_loss_to_x1')
-            gradients_summary(losses['ae_loss'], x2, name='ae_loss_to_x2')
-        if config.PRETRAIN_COARSE_NETWORK:
-            losses['g_loss'] = 0
-        else:
-            losses['g_loss'] = config.GAN_LOSS_ALPHA * losses['g_loss']
-        losses['g_loss'] += config.L1_LOSS_ALPHA * losses['l1_loss']
-        logger.info('Set L1_LOSS_ALPHA to %f' % config.L1_LOSS_ALPHA)
-        logger.info('Set GAN_LOSS_ALPHA to %f' % config.GAN_LOSS_ALPHA)
-        if config.AE_LOSS:
-            losses['g_loss'] += config.AE_LOSS_ALPHA * losses['ae_loss']
-            logger.info('Set AE_LOSS_ALPHA to %f' % config.AE_LOSS_ALPHA)
         g_vars = tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES, 'inpaint_net')
         d_vars = tf.get_collection(
