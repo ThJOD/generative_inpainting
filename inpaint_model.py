@@ -367,7 +367,7 @@ class InpaintCAModel(Model):
         # apply mask and complete image
         batch_complete = batch_predicted*mask + batch_incomplete*(1.-mask)
         #Now l1_loss is just an l1_loss over the whole image
-        losses['l1_loss'] = tf.reduce_mean(tf.abs(batch_pos - batch_complete))
+        losses['l1_loss'] = tf.reduce_mean(tf.abs(batch_pos - x1)) + tf.reduce_mean(tf.abs(batch_pos - x2))
         if summary:
             scalar_summary('losses/l1_loss', losses['l1_loss'])
             viz_img = [batch_pos, batch_incomplete, batch_complete]
@@ -388,7 +388,7 @@ class InpaintCAModel(Model):
             pos_global, neg_global = tf.split(pos_neg_global, 2)
             # SN_PatchGAN loss
             g_loss_global, d_loss_global = gan_sn_patch_gan_loss(pos_global, neg_global, name='gan/global_gan')
-            losses['g_loss'] = g_loss_global + losses['l1_loss']
+            losses['g_loss'] = config.SNGAN_LOSS_ALPHA * g_loss_global + config.L1_LOSS_ALPHA * losses['l1_loss']
             losses['d_loss'] = d_loss_global
             if summary and not config.PRETRAIN_COARSE_NETWORK:
                 gradients_summary(g_loss_global, batch_predicted, name='g_loss_global')

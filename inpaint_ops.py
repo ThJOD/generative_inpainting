@@ -235,24 +235,24 @@ def strokeMask(config, name='mask'):
         if mask is None:
             mask = np.zeros((height, width), np.float32)
         for i in range(numMasks):
-            numVertex = np.random.randint(1,maxVertex)
+            numVertex = np.random.randint(maxVertex / 2,maxVertex)
             startX = np.random.randint(0,width - 1)
             startY = np.random.randint(0,height - 1)
             for i in range(numVertex):
                 angle = np.random.uniform(0.0,maxAngle)
                 if( i % 2 == 0):
                     angle = 2 * np.pi - angle
-                length = np.random.uniform(0.0,maxLength)
-                brushWidth = np.random.randint(1,maxBushWidth)
+                length = np.random.uniform(maxLength / 4,maxLength)
+                brushWidth = np.random.randint(maxBushWidth / 4,maxBushWidth)
                 #print(type(np.floor(startX + length * np.sin(angle))))
                 cv2.line(mask,(startX,startY),(int(np.floor(startX + length * np.sin(angle))),int(np.floor(startY + length * np.cos(angle)))),1,brushWidth)
                 startX = int(np.floor(startX + length * np.sin(angle)))
                 startY = int(np.floor(startY + length * np.cos(angle)))
                 cv2.circle(mask,(startX,startY),int(brushWidth / 2.0),1)
-                if np.random.randint(0,2):
-                    mask = cv2.flip( mask, 0 )
-                if np.random.randint(0,2):
-                    mask = cv2.flip( mask, 1 )
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 0 )
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 1 )
         mask = mask.reshape(1,height,width,1)
         return mask
     with tf.variable_scope(name), tf.device('/cpu:0'):
