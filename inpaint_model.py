@@ -447,9 +447,7 @@ class InpaintCAModel(Model):
         """
         config.MAX_DELTA_HEIGHT = 0
         config.MAX_DELTA_WIDTH = 0
-        if bbox is None:
-            bbox = random_bbox(config)
-        mask = bbox2mask(bbox, config, name=name+'mask_c')
+        mask = strokeMask(config, name='mask_c')
         batch_pos = batch_data / 127.5 - 1.
         edges = None
         batch_incomplete = batch_pos*(1.-mask)
