@@ -129,7 +129,7 @@ class InpaintCAModel(Model):
         # two stage network
         cnum = 24
         with tf.variable_scope(name, reuse=reuse), \
-                arg_scope([gated_conv, gated_deconv],
+                arg_scope([gated_conv, gated_deconv, gen_conv],
                           training=training, padding=padding):
             # stage1
             x = gated_conv(x, cnum, 5, 1, name='conv1')
@@ -176,8 +176,7 @@ class InpaintCAModel(Model):
             x = gated_conv(x, 2*cnum, 3, 1, name='pmconv3')
             x = gated_conv(x, 4*cnum, 3, 2, name='pmconv4_downsample')
             x = gated_conv(x, 4*cnum, 3, 1, name='pmconv5')
-            x = gated_conv(x, 4*cnum, 3, 1, name='pmconv6',
-                         activation=tf.nn.relu)
+            x = gated_conv(x, 4*cnum, 3, 1, name='pmconv6')
             x, offset_flow = contextual_attention(x, x, mask_s, 3, 1, rate=2)
             x = gated_conv(x, 4*cnum, 3, 1, name='pmconv9')
             x = gated_conv(x, 4*cnum, 3, 1, name='pmconv10')
@@ -229,11 +228,17 @@ class InpaintCAModel(Model):
         with tf.variable_scope('discriminator', reuse=reuse):
             cnum = 64
             x =  sn_conv(x, cnum, ksize=5, stride=(1,1,1,1), name='conv1', training=training)
+            x = tf.nn.leaky_relu(x)
             x =  sn_conv(x, cnum * 2, ksize=5, stride=(1,2,2,1), name='conv2', training=training)
+            x = tf.nn.leaky_relu(x)
             x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv3', training=training)
+            x = tf.nn.leaky_relu(x)
             x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv4', training=training)
+            x = tf.nn.leaky_relu(x)
             x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv5', training=training)
+            x = tf.nn.leaky_relu(x)
             x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv6', training=training)
+            x = tf.nn.leaky_relu(x)
             x =  tf.reduce_mean(x,[1,2,3]) #reducing for each image to one NHWC so reduces HWC
             return x
             
@@ -370,7 +375,7 @@ class InpaintCAModel(Model):
         losses['l1_loss'] = tf.reduce_mean(tf.abs(batch_pos - x1)) + tf.reduce_mean(tf.abs(batch_pos - x2))
         if summary:
             scalar_summary('losses/l1_loss', losses['l1_loss'])
-            viz_img = [batch_pos, batch_incomplete, batch_complete]
+            viz_img = [batch_pos, batch_incomplete, batch_complete,]
             if offset_flow is not None:
                 viz_img.append(
                     resize(offset_flow, scale=4,
@@ -442,12 +447,13 @@ class InpaintCAModel(Model):
             name+'_raw_incomplete_complete', config.VIZ_MAX_OUT)
         return batch_complete
 
-    def build_infer_graph_gated(self, batch_data, config, bbox=None, name='val'):
+    def build_infer_graph_gated(self, batch_data, config, mask=None, name='val'):
         """
         """
         config.MAX_DELTA_HEIGHT = 0
         config.MAX_DELTA_WIDTH = 0
-        mask = strokeMask(config, name='mask_c')
+        if mask is None:
+            mask = strokeMask(config, name='mask_c')
         batch_pos = batch_data / 127.5 - 1.
         edges = None
         batch_incomplete = batch_pos*(1.-mask)
@@ -478,9 +484,8 @@ class InpaintCAModel(Model):
         """
         """
         # generate mask, 1 represents masked point
-        bbox = (tf.constant(config.HEIGHT//2), tf.constant(config.WIDTH//2),
-                tf.constant(config.HEIGHT), tf.constant(config.WIDTH))
-        return self.build_infer_graph_gated(batch_data, config, bbox, name)
+        mask = strokeMask(config, name='mask_c')
+        return self.build_infer_graph_gated(batch_data, config, mask, name)
 
 
     def build_server_graph(self, batch_data, reuse=False, is_training=False):
