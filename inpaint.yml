@@ -1,5 +1,5 @@
 # parameters
-DATASET: 'places' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
+DATASET: 'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
 RANDOM_CROP: False
 VAL: TRUE
 LOG_DIR: full_model_places_256_sn_patch_gan
@@ -80,6 +80,10 @@ MAX_DELTA_WIDTH: 32
 BATCH_SIZE: 8
 VERTICAL_MARGIN: 0
 HORIZONTAL_MARGIN: 0
+
+#Engineering Parameters
+RANDOM_LABELFLIP : False
+LABELFLIP_PROB : 0.05
 
 
 #Mask creation

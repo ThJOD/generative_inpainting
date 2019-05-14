@@ -224,9 +224,11 @@ class InpaintCAModel(Model):
             dout_global = tf.layers.dense(dglobal, 1, name='dout_global_fc')
             return dout_local, dout_global
 
-    def build_SNPatchGan_discriminator(self, x, reuse=False, training=True):
+    def build_SNPatchGan_discriminator(self, x,mask, reuse=False, training=True):
         with tf.variable_scope('discriminator', reuse=reuse):
             cnum = 64
+            ones_x = tf.ones_like(x)[:, :, :, 0:1]
+            x = tf.concat([x, ones_x, ones_x*mask], axis=3)
             x =  sn_conv(x, cnum, ksize=5, stride=(1,1,1,1), name='conv1', training=training)
             x = tf.nn.leaky_relu(x)
             x =  sn_conv(x, cnum * 2, ksize=5, stride=(1,2,2,1), name='conv2', training=training)
@@ -239,7 +241,6 @@ class InpaintCAModel(Model):
             x = tf.nn.leaky_relu(x)
             x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv6', training=training)
             x = tf.nn.leaky_relu(x)
-            x =  tf.reduce_mean(x,[1,2,3]) #reducing for each image to one NHWC so reduces HWC
             return x
             
 
@@ -372,10 +373,14 @@ class InpaintCAModel(Model):
         # apply mask and complete image
         batch_complete = batch_predicted*mask + batch_incomplete*(1.-mask)
         #Now l1_loss is just an l1_loss over the whole image
-        losses['l1_loss'] = tf.reduce_mean(tf.abs(batch_pos - x1)) + tf.reduce_mean(tf.abs(batch_pos - x2))
+        losses['l1_loss_x1'] = tf.reduce_mean(tf.abs(batch_pos - x1))
+        losses['l1_loss_x2'] = tf.reduce_mean(tf.abs(batch_pos - x2))
+        losses['l1_loss'] = losses['l1_loss_x1'] + losses['l1_loss_x2']
         if summary:
             scalar_summary('losses/l1_loss', losses['l1_loss'])
-            viz_img = [batch_pos, batch_incomplete, batch_complete,]
+            scalar_summary('losses/l1_loss_x1', losses['l1_loss_x1'])
+            scalar_summary('losses/l1_loss_x2', losses['l1_loss_x2'])
+            viz_img = [batch_pos, batch_incomplete, batch_complete,x1,x2]
             if offset_flow is not None:
                 viz_img.append(
                     resize(offset_flow, scale=4,
@@ -385,13 +390,18 @@ class InpaintCAModel(Model):
                 'raw_incomplete_predicted_complete', config.VIZ_MAX_OUT)
 
         # gan
-        batch_pos_neg = tf.concat([batch_pos, batch_complete], axis=0)
+        if not config.RANDOM_LABELFLIP:
+            batch_pos_neg = tf.concat([batch_pos, batch_complete], axis=0)
+        else:
+            if tf.random.uniform([1],0.0,1.0) < config.LABELFLIP_PROB:
+                batch_pos_neg = tf.concat([batch_complete, batch_pos], axis=0)
         # wgan with gradient penalty
         if config.GAN == 'SN_PatchGAN':
             # seperate gan
-            pos_neg_global = self.build_SNPatchGan_discriminator(batch_pos_neg, training=training, reuse=reuse)
+            pos_neg_global = self.build_SNPatchGan_discriminator(batch_pos_neg,mask, training=training, reuse=reuse)
             pos_global, neg_global = tf.split(pos_neg_global, 2)
             # SN_PatchGAN loss
+       
             g_loss_global, d_loss_global = gan_sn_patch_gan_loss(pos_global, neg_global, name='gan/global_gan')
             losses['g_loss'] = config.SNGAN_LOSS_ALPHA * g_loss_global + config.L1_LOSS_ALPHA * losses['l1_loss']
             losses['d_loss'] = d_loss_global
@@ -470,7 +480,7 @@ class InpaintCAModel(Model):
         # apply mask and reconstruct
         batch_complete = batch_predicted*mask + batch_incomplete*(1.-mask)
         # global image visualization
-        viz_img = [batch_pos, batch_incomplete, batch_complete]
+        viz_img = [batch_pos, batch_incomplete, batch_complete, x1, x2]
         if offset_flow is not None:
             viz_img.append(
                 resize(offset_flow, scale=4,

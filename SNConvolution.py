@@ -51,6 +51,7 @@ class SNConvolution2D():
         self.u = tf.get_variable(name + "_u", [1, cnum], initializer=tf.random_normal_initializer(), trainable=False)
         self.stride = stride
         self.padding = padding
+        self.training = training
 
     def W_bar(self):
         """
@@ -59,6 +60,8 @@ class SNConvolution2D():
         w_shape = self.w.shape.as_list()
         W_mat = tf.reshape(self.w, [-1, w_shape[-1]]) #Produces a Matrix of shape [Inchannel * kernelW * kernelH, OutChannel]
         sigma, _u, _ = max_singular_value(W_mat, self.u, self.Ip)
+        if self.training:
+            self.u = _u
         sigma = tf.broadcast_to(tf.reshape(sigma,[1,1,1,1]),self.w.shape)
         return self.w / sigma
 

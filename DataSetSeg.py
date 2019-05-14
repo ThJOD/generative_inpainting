@@ -15,7 +15,7 @@ from ng.ops.image_ops import np_random_crop
 READER_LOCK = threading.Lock()
 
 
-class DataFromFNames(Dataset):
+class DataFromFNamesCatIds(Dataset):
     """Data pipeline from list of filenames.
     Args:
         fnamelists (list): A list of filenames or tuple of filenames, e.g.
@@ -168,6 +168,8 @@ class DataFromFNames(Dataset):
                             random_h, random_w, align=False)  # use last rand
                     else:
                         img = cv2.resize(img, tuple(self.shapes[i][:-1][::-1]))
+                    if 'catIds' in filenames[i]:
+                        img = tf.one_hot(img,8,on_value=1.0)
                     imgs.append(img)
             if self.return_fnames:
                 batch_data.append(imgs + list(filenames))
