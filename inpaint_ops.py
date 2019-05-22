@@ -624,6 +624,141 @@ def image2edge(image):
     return np.float32(np.uint8(out))
 
 
+def roofMask(config, name='mask'):
+    def generateMask(diagonal_length_mean, diagonal_length_deviation, cross_point_deviation, cross_angle_mean, cross_angle_deviation,height, width, mask=None):
+        if mask is None:
+            mask = np.zeros((height, width), np.float32)
+        point1 = (np.random.randint(width//8,width - width//8),np.random.randint(height//4,height//2))
+        quarter = np.random.randint(0,3)
+        widthFactor = 1
+        heightFactor = 1
+        if quarter > 0:
+            widthFactor *= -1
+        if quarter % 2 == 0:
+            heightFactor *= -1
+        point2 = (np.random.randint(width//8,width - width//8) * widthFactor,np.random.randint(height//4,height//2) * heightFactor)
+        diag1Length = np.linalg.norm(np.array(point1)-np.array(point2))
+        crossPointDist = np.amax((np.random.normal(diag1Length//2, cross_point_deviation * diag1Length,1),0.0001))
+        crossPointRelDistInv = diag1Length / crossPointDist
+        crossPoint = np.array([(point1[0] + point2[0])//crossPointRelDistInv,(point1[1] + point2[1])//crossPointRelDistInv])
+        #print(crossPoint)
+        diag2Length = np.amax((np.random.normal(diag1Length, diag1Length * diagonal_length_deviation ,1),0.0))
+        #print(diag2Length)
+        crossAngle = np.random.normal(cross_angle_mean, cross_angle_deviation,1)
+        #print(crossAngle)
+        crossAngle += np.arctan((point1[1] - crossPoint[1]) / (point1[0] - crossPoint[0]) )
+        #print(crossAngle)
+        point3 = (crossPoint[0] + diag2Length//2 * np.cos(crossAngle),np.amin((crossPoint[1] + diag2Length//2 * np.sin(crossAngle),height//2)))
+        point4 = (crossPoint[0] + diag2Length//2 * np.cos(crossAngle + np.pi),np.amin((crossPoint[1] + diag2Length//2 * np.sin(crossAngle + np.pi),height//2)))
+        points = np.array((point1, point2, point3, point4  ), dtype=int)
+        cv2.fillConvexPoly(mask, cv2.convexHull(points), 1) 
+        #cv2.line(mask,point1,point2,2,10)
+        #cv2.line(mask,point3,point4,3,10)
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 0 )
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 1 )
+        return mask
+    with tf.variable_scope(name), tf.device('/cpu:0'):
+        img_shape = config.IMG_SHAPES
+        diagonal_length_mean = config.DIAGONAL_LENGTH_MEAN
+        diagonal_length_deviation = config.DIAGONAL_LENGTH_DEVIATION
+        cross_point_deviation = config.CROSS_POINT_DEVIATION
+        cross_angle_mean = config.CROSS_ANGLE_MEAN
+        cross_angle_deviation = config.CROSS_ANGLE_DEVIATION
+        height = img_shape[0]
+        width = img_shape[1]
+        mask = tf.py_function(generateMask,[diagonal_length_mean, diagonal_length_deviation, cross_point_deviation, cross_angle_mean,cross_angle_deviation,height,width],tf.float32)
+        #mask = generateMask(height, width, maxVertex,maxLength,maxBushWidth,maxAngle,numMasks)
+        mask.set_shape([1] + [height, width] + [1])
+    return mask
+
+
+def treeMask(config, name='mask'):
+    def generateMask(height, width,stem_width_mean, stem_width_deviation, stem_height_mean, stem_height_deviation, crown_width_mean,crown_width_deviation, crown_height_mean, crown_height_deviation,  mask=None):
+        if mask is None:
+            mask = np.zeros((height, width), np.float32)
+        startX = np.random.randint(0,width)
+        stemWidth = int(np.amax((np.random.normal(stem_width_mean, stem_width_deviation,1),1)))
+        stemHeight = int(np.amax((np.random.normal(stem_height_mean, stem_height_deviation,1),1)))
+        cv2.line(mask,(startX,0),(startX, stemHeight),1, stemWidth)
+        crownWidth = int(np.amax((np.random.normal(crown_width_mean, crown_width_deviation,1),1)))
+        crownHeight = int(np.amax((np.random.normal(crown_height_mean, crown_height_deviation,1),1)))
+        cv2.ellipse(mask,(startX,stemHeight - 10 + crownHeight//2),(crownWidth//2,crownHeight//2),0,0,360,1,-1)
+        
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 0 )
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 1 )
+        return mask
+    with tf.variable_scope(name), tf.device('/cpu:0'):
+        img_shape = config.IMG_SHAPES
+        stem_width_mean = config.STEM_WIDTH_MEAN
+        stem_width_deviation = config.STEM_WIDTH_DEVIATION
+        stem_height_mean = config.STEM_HEIGHT_MEAN
+        stem_height_deviation = config.STEM_HEIGHT_DEVIATION
+        crown_width_mean = config.CROWN_WIDTH_MEAN
+        crown_width_deviation = config.CROWN_WIDTH_DEVIATION
+        crown_height_mean = config.CROWN_HEIGHT_MEAN
+        crown_height_deviation = config.CROWN_HEIGHT_DEVIATION
+        height = img_shape[0]
+        width = img_shape[1]
+        mask = tf.py_function(generateMask,[height,width,stem_width_mean,stem_width_deviation,stem_height_mean, stem_height_deviation, crown_width_mean,crown_width_deviation, crown_height_mean, crown_height_deviation ],tf.float32)
+        #mask = generateMask(height, width, maxVertex,maxLength,maxBushWidth,maxAngle,numMasks)
+        mask.set_shape([1] + [height, width] + [1])
+    return mask
+
+
+def treeGroupMask(config, name='mask'):
+    def generateMask(height, width,minTrees,maxTrees, crown_angle_mean, crown_angle_deviation, crown_width_mean,crown_width_deviation, crown_height_mean, crown_height_deviation,  mask=None):
+        if mask is None:
+            mask = np.zeros((height, width), np.float32)
+        numTrees = np.random.randint(minTrees,maxTrees)
+        xCenter = 0
+        crownWidth = np.random.normal(crown_width_mean, crown_width_deviation,numTrees)
+        crownHeight = np.random.normal(crown_height_mean, crown_height_deviation,numTrees)
+        crownAngle = np.random.normal(crown_angle_mean, crown_angle_deviation,numTrees)
+        for i in range(numTrees):
+            cv2.ellipse(mask,(int(xCenter),0),(int(np.amax((crownWidth[i],1)))//2,int(np.amax((crownHeight[i],1)))//2),0,0,360,1,-1)
+            #cv2.ellipse(mask,(int(xCenter),20),(25//2,80//2),0,0,360,1,-1)
+            xCenter += crownWidth[i]//3
+        
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 0 )
+        if np.random.randint(0,2):
+            mask = cv2.flip( mask, 1 )
+        return mask
+    with tf.variable_scope(name), tf.device('/cpu:0'):
+        img_shape = config.IMG_SHAPES
+        crown_angle_mean = config.CROWN_ANGLE_MEAN
+        crown_angle_deviation = config.CROWN_ANGLE_DEVIATION
+        crown_width_mean = config.CROWN_GROUP_WIDTH_MEAN
+        crown_width_deviation = config.CROWN_GROUP_WIDTH_DEVIATION
+        crown_height_mean = config.CROWN_GROUP_HEIGHT_MEAN
+        crown_height_deviation = config.CROWN_GROUP_HEIGHT_DEVIATION
+        minTrees = config.MIN_TREES
+        maxTrees = config.MAX_TREES
+        height = img_shape[0]
+        width = img_shape[1]
+        mask = tf.py_function(generateMask,[height,width,minTrees, maxTrees,crown_angle_mean,crown_angle_deviation, crown_width_mean,crown_width_deviation, crown_height_mean, crown_height_deviation ],tf.float32)
+        #mask = generateMask(height, width, maxVertex,maxLength,maxBushWidth,maxAngle,numMasks)
+        mask.set_shape([1] + [height, width] + [1])
+    return mask
+
+def RandomMaskGenerator(config, name='mask'):
+    maskType = np.random.randint(0,3)
+    maskF = None
+    if maskType == 0:
+        maskF = roofMask
+    if maskType == 1:
+        maskF = treeMask
+    if maskType == 2:
+        maskF = treeGroupMask
+    mask = maskF(config,name)
+    return mask
+        
+        
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -632,3 +767,5 @@ if __name__ == "__main__":
     parser.add_argument('--imageOut', default='result.png', type=str, help='Image B is reconstructed with image A.')
     args = parser.parse_args()
     test_contextual_attention(args)
+
+
