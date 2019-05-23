@@ -7,11 +7,12 @@ import cv2
 import tensorflow as tf
 import neuralgym as ng
 
-from ng.data import feeding_queue_runner as queue_runner
-from ng.data.dataset import Dataset
-from ng.ops.image_ops import np_random_crop
+from neuralgym.data import feeding_queue_runner as queue_runner
+from neuralgym.data.dataset import Dataset
+from neuralgym.ops.image_ops import np_random_crop
 
 
+logger = logging.getLogger()
 READER_LOCK = threading.Lock()
 
 
@@ -130,15 +131,16 @@ class DataFromFNamesCatIds(Dataset):
             self._queue, [enq]*self.nthreads,
             feed_dict_op=[lambda: self.next_batch()],
             feed_dict_key=self.batch_phs))
-        # summary_name = 'fraction_of_%d_full' % capacity
-        # logging_ops.scalar_summary("queue/%s/%s" % (
-            # self._queue.name, summary_name), math_ops.cast(
-                # self._queue.size(), dtypes.float32) * (1. / capacity))
+        summary_name = 'fraction_of_%d_full' % capacity
+        #logging_ops.scalar_summary("queue/%s/%s" % (
+            #self._queue.name, summary_name), math_ops.cast(
+                #self._queue.size(), dtypes.float32) * (1. / capacity))
 
     def read_img(self, filename):
         img = cv2.imread(filename)
         if img is None:
             print('image is None, sleep this thread for 0.1s.')
+            print(filename)
             time.sleep(0.1)
             return img, True
         if self.fn_preprocess:
@@ -151,7 +153,7 @@ class DataFromFNamesCatIds(Dataset):
             error = True
             while error:
                 error = False
-                if random:
+                if self.random:
                     filenames = random.choice(self.fnamelists_)
                 else:
                     with READER_LOCK:
@@ -162,14 +164,15 @@ class DataFromFNamesCatIds(Dataset):
                 random_w = None
                 for i in range(len(filenames)):
                     img, error = self.read_img(filenames[i]) #Put one hot encoding here
+                    if i == 1:
+                        img = img[:,:,0:1]
                     if self.random_crop:
                         img, random_h, random_w = np_random_crop(
                             img, tuple(self.shapes[i][:-1]),
                             random_h, random_w, align=False)  # use last rand
                     else:
                         img = cv2.resize(img, tuple(self.shapes[i][:-1][::-1]))
-                    if 'catIds' in filenames[i]:
-                        img = tf.one_hot(img,8,on_value=1.0)
+                    
                     imgs.append(img)
             if self.return_fnames:
                 batch_data.append(imgs + list(filenames))
@@ -178,4 +181,4 @@ class DataFromFNamesCatIds(Dataset):
         return zip(*batch_data)
 
     def _maybe_download_and_extract(self):
-pass
+        pass

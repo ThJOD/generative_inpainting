@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import neuralgym as ng
-impo
+import os
 
 from inpaint_model import InpaintCAModel
 
@@ -41,11 +41,12 @@ if __name__ == "__main__":
     mask = np.expand_dims(mask, 0)
     input_image = np.concatenate([image, mask], axis=2)
 
-    sess_config = tf.ConfigProto()
+    #sess_config = tf.ConfigProto()
+    sess_config = tf.ConfigProto(        device_count = {'GPU': 0}    )
     sess_config.gpu_options.allow_growth = True
     with tf.Session(config=sess_config) as sess:
         input_image = tf.constant(input_image, dtype=tf.float32)
-        output = model.build_server_graph(input_image)
+        output = model.build_server_graph_gated(input_image)
         output = (output + 1.) * 127.5
         output = tf.reverse(output, [-1])
         output = tf.saturate_cast(output, tf.uint8)

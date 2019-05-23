@@ -14,7 +14,7 @@ from neuralgym.ops.gan_ops import gan_wgan_loss, gradients_penalty
 from neuralgym.ops.gan_ops import random_interpolates
 
 from inpaint_ops import gated_conv, gen_deconv, dis_conv, gen_conv,gated_deconv, sn_conv
-from inpaint_ops import random_bbox, bbox2mask, local_patch,strokeMask
+from inpaint_ops import random_bbox, bbox2mask, local_patch,strokeMask,RandomMaskGenerator
 from inpaint_ops import spatial_discounting_mask
 from inpaint_ops import resize_mask_like, contextual_attention
 from gan_loss import gan_sn_patch_gan_loss
@@ -155,7 +155,7 @@ class InpaintCAModel(Model):
 
             # stage2, paste result as input
             # x = tf.stop_gradient(x)
-            x = x*mask + xin*(1.-mask)
+            x = tf.concat([x*mask + xin[:,:,:,0:3]*(1.-mask),xin[:,:,:,3:]],axis=3)
             x.set_shape(xin.get_shape().as_list())
             # conv branch
             xnow = tf.concat([x, ones_x, ones_x*mask], axis=3)
@@ -356,11 +356,15 @@ class InpaintCAModel(Model):
 
     def build_graph_with_losses_gated(self, batch_data, config, training=True,
                                 summary=False, reuse=False):
-        batch_data = tf.concat(batch_data,axis=3)
-        batch_pos = batch_data / 127.5 - 1.
+
+        batch_pos_img = batch_data[0] / 127.5 - 1.
+        batch_pos_seg = tf.one_hot(tf.reshape(batch_data[1][:,:,:,0:1],batch_data[1].shape[:-1]),8,axis=3,on_value=1.0)
+        batch_pos =  tf.concat([batch_pos_img,batch_pos_seg],axis=3)
+        
         # generate mask, 1 represents masked point
-        mask = strokeMask(config, name='mask_c')
-        batch_incomplete = batch_pos*(1.-mask)
+        mask = RandomMaskGenerator(config, name='mask_c')
+        #mask = strokeMask(config, name='mask_c')
+        batch_incomplete = tf.concat([batch_pos_img*(1.-mask),batch_pos_seg],axis=3)
         x1, x2, offset_flow = self.build_inpaint_net_gated(
             batch_incomplete, mask, config, reuse=reuse, training=training,
             padding=config.PADDING)
@@ -372,16 +376,16 @@ class InpaintCAModel(Model):
             logger.info('Set batch_predicted to x2.')
         losses = {}
         # apply mask and complete image
-        batch_complete = batch_predicted*mask + batch_incomplete*(1.-mask)
+        batch_complete = batch_predicted*mask + batch_pos_img*(1.-mask)
         #Now l1_loss is just an l1_loss over the whole image
-        losses['l1_loss_x1'] = tf.reduce_mean(tf.abs(batch_pos - x1))
-        losses['l1_loss_x2'] = tf.reduce_mean(tf.abs(batch_pos - x2))
+        losses['l1_loss_x1'] = tf.reduce_mean(tf.abs(batch_pos_img - x1))
+        losses['l1_loss_x2'] = tf.reduce_mean(tf.abs(batch_pos_img - x2))
         losses['l1_loss'] = losses['l1_loss_x1'] + losses['l1_loss_x2']
         if summary:
             scalar_summary('losses/l1_loss', losses['l1_loss'])
             scalar_summary('losses/l1_loss_x1', losses['l1_loss_x1'])
             scalar_summary('losses/l1_loss_x2', losses['l1_loss_x2'])
-            viz_img = [batch_pos, batch_incomplete, batch_complete,x1,x2]
+            viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete,x1,x2]
             if offset_flow is not None:
                 viz_img.append(
                     resize(offset_flow, scale=4,
@@ -390,12 +394,13 @@ class InpaintCAModel(Model):
                 tf.concat(viz_img, axis=2),
                 'raw_incomplete_predicted_complete', config.VIZ_MAX_OUT)
 
+        batch_complete_seg = tf.concat([batch_complete,batch_pos_seg],axis=3)
         # gan
         if not config.RANDOM_LABELFLIP:
-            batch_pos_neg = tf.concat([batch_pos, batch_complete], axis=0)
+            batch_pos_neg = tf.concat([batch_pos, batch_complete_seg], axis=0)
         else:
             if tf.random.uniform([1],0.0,1.0) < config.LABELFLIP_PROB:
-                batch_pos_neg = tf.concat([batch_complete, batch_pos], axis=0)
+                batch_pos_neg = tf.concat([batch_complete_seg, batch_pos], axis=0)
         # wgan with gradient penalty
         if config.GAN == 'SN_PatchGAN':
             # seperate gan
@@ -434,7 +439,7 @@ class InpaintCAModel(Model):
         mask = bbox2mask(bbox, config, name=name+'mask_c')
         batch_pos = batch_data / 127.5 - 1.
         edges = None
-        batch_incomplete = batch_pos*(1.-mask)
+        batch_incomplete = batch_pos[:,:,:,0:3]*(1.-mask)
         # inpaint
         x1, x2, offset_flow = self.build_inpaint_net(
             batch_incomplete, mask, config, reuse=True,
@@ -461,14 +466,17 @@ class InpaintCAModel(Model):
     def build_infer_graph_gated(self, batch_data, config, mask=None, name='val'):
         """
         """
+        print(batch_data)
         config.MAX_DELTA_HEIGHT = 0
         config.MAX_DELTA_WIDTH = 0
-        batch_data = tf.concat(batch_data,axis=3)
         if mask is None:
-            mask = strokeMask(config, name='mask_c')
-        batch_pos = batch_data / 127.5 - 1.
+            mask = RandomMaskGenerator(config, name='mask_c')
+            #mask = strokeMask(config, name='mask_c')
+        batch_pos_img = batch_data[0] / 127.5 - 1.
+        batch_pos_seg = tf.one_hot(tf.reshape(batch_data[1][:,:,:,0:1],batch_data[1].shape[:-1]),8,axis=3,on_value=1.0)
+        batch_pos =  tf.concat([batch_pos_img,batch_pos_seg],axis=3)
         edges = None
-        batch_incomplete = batch_pos*(1.-mask)
+        batch_incomplete = tf.concat([batch_pos_img*(1.-mask),batch_pos_seg],axis=3)
         # inpaint
         x1, x2, offset_flow = self.build_inpaint_net_gated(
             batch_incomplete, mask, config, reuse=True,
@@ -480,9 +488,9 @@ class InpaintCAModel(Model):
             batch_predicted = x2
             logger.info('Set batch_predicted to x2.')
         # apply mask and reconstruct
-        batch_complete = batch_predicted*mask + batch_incomplete*(1.-mask)
+        batch_complete = batch_predicted*mask + batch_pos_img*(1.-mask)
         # global image visualization
-        viz_img = [batch_pos, batch_incomplete, batch_complete, x1, x2]
+        viz_img = [batch_pos[:,:,:,0:3], batch_incomplete[:,:,:,0:3], batch_complete, x1, x2]
         if offset_flow is not None:
             viz_img.append(
                 resize(offset_flow, scale=4,
@@ -496,7 +504,8 @@ class InpaintCAModel(Model):
         """
         """
         # generate mask, 1 represents masked point
-        mask = strokeMask(config, name='mask_c')
+        mask = RandomMaskGenerator(config, name='mask_c')
+        #mask = strokeMask(config, name='mask_c')
         return self.build_infer_graph_gated(batch_data, config, mask, name)
 
 

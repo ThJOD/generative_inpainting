@@ -121,14 +121,19 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.validation_filename):
         os.mknod(args.validation_filename)
-
+    training_string_list = []
+    for i in training_tuple_list:
+        training_string_list.append(i[0] + ';' + i [1])
+    validation_string_list = []
+    for i in validation_tuple_list:
+        validation_string_list.append(i[0] + ';' + i [1])
     # write to file
     fo = open(args.train_filename, "w")
-    fo.write("\n".join(training_tuple_list))
+    fo.write("\n".join(training_string_list))
     fo.close()
 
     fo = open(args.validation_filename, "w")
-    fo.write("\n".join(validation_tuple_list))
+    fo.write("\n".join(validation_string_list))
     fo.close()
 
     # print process

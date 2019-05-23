@@ -646,7 +646,7 @@ def roofMask(config, name='mask'):
         #print(diag2Length)
         crossAngle = np.random.normal(cross_angle_mean, cross_angle_deviation,1)
         #print(crossAngle)
-        crossAngle += np.arctan((point1[1] - crossPoint[1]) / (point1[0] - crossPoint[0]) )
+        crossAngle += np.arctan((point1[1] - crossPoint[1]) / np.amax((point1[0] - crossPoint[0]) ,0.001))
         #print(crossAngle)
         point3 = (crossPoint[0] + diag2Length//2 * np.cos(crossAngle),np.amin((crossPoint[1] + diag2Length//2 * np.sin(crossAngle),height//2)))
         point4 = (crossPoint[0] + diag2Length//2 * np.cos(crossAngle + np.pi),np.amin((crossPoint[1] + diag2Length//2 * np.sin(crossAngle + np.pi),height//2)))
@@ -658,6 +658,7 @@ def roofMask(config, name='mask'):
             mask = cv2.flip( mask, 0 )
         if np.random.randint(0,2):
             mask = cv2.flip( mask, 1 )
+        mask = mask.reshape(1,height,width,1)
         return mask
     with tf.variable_scope(name), tf.device('/cpu:0'):
         img_shape = config.IMG_SHAPES
@@ -690,6 +691,7 @@ def treeMask(config, name='mask'):
             mask = cv2.flip( mask, 0 )
         if np.random.randint(0,2):
             mask = cv2.flip( mask, 1 )
+        mask = mask.reshape(1,height,width,1)
         return mask
     with tf.variable_scope(name), tf.device('/cpu:0'):
         img_shape = config.IMG_SHAPES
@@ -727,6 +729,7 @@ def treeGroupMask(config, name='mask'):
             mask = cv2.flip( mask, 0 )
         if np.random.randint(0,2):
             mask = cv2.flip( mask, 1 )
+        mask = mask.reshape(1,height,width,1)
         return mask
     with tf.variable_scope(name), tf.device('/cpu:0'):
         img_shape = config.IMG_SHAPES

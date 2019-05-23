@@ -1,6 +1,6 @@
 # parameters
-DATASET: 'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
-RANDOM_CROP: False
+DATASET: city #'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
+RANDOM_CROP: True
 VAL: TRUE
 LOG_DIR: full_model_places_256_sn_patch_gan
 MODEL_RESTORE: '' #'20190502082054095172_6ee393d4cfa2_walls_scaled_NORMAL_wgan_gp_full_model_walls_allSets_256' # 'release_places2_256'  # '20180115220926508503_jyugpu0_places2_NORMAL_wgan_gp_full_model'
@@ -70,14 +70,19 @@ DATA_FLIST:
     'data_flist/train_places_256.flist',
     'data_flist/val_places_256.flist',
   ]
+  city: [
+    'data_flist/train_shuffled_city.flist',
+    'data_flist/validation_shuffled_city.flist',
+  ]
 
 STATIC_VIEW_SIZE: 30
 IMG_SHAPES: [256, 256, 3]
+SEG_SHAPES: [256,256,1]
 HEIGHT: 128
 WIDTH: 128
 MAX_DELTA_HEIGHT: 32
 MAX_DELTA_WIDTH: 32
-BATCH_SIZE: 8
+BATCH_SIZE: 12
 VERTICAL_MARGIN: 0
 HORIZONTAL_MARGIN: 0
 
@@ -92,6 +97,29 @@ MAX_LENGTH: 80
 MAX_BUSH_WIDTH: 40
 MAX_ANGLE: 1
 NUM_STROKES: 4
+DIAGONAL_LENGTH_MEAN: 128
+DIAGONAL_LENGTH_DEVIATION: 0.1  #Relative to the first random length
+CROSS_POINT_DEVIATION: 0.2
+CROSS_ANGLE_MEAN: 1.570796327
+CROSS_ANGLE_DEVIATION : 0.196349541
+
+STEM_WIDTH_MEAN : 30
+STEM_WIDTH_DEVIATION : 10
+STEM_HEIGHT_MEAN : 60
+STEM_HEIGHT_DEVIATION : 20
+CROWN_WIDTH_MEAN : 70
+CROWN_WIDTH_DEVIATION : 15
+CROWN_HEIGHT_MEAN : 100
+CROWN_HEIGHT_DEVIATION : 20
+
+CROWN_GROUP_WIDTH_MEAN : 70
+CROWN_GROUP_WIDTH_DEVIATION : 15
+CROWN_GROUP_HEIGHT_MEAN : 100
+CROWN_GROUP_HEIGHT_DEVIATION : 40
+CROWN_ANGLE_MEAN : 0
+CROWN_ANGLE_DEVIATION: 25
+MIN_TREES: 4
+MAX_TREES: 12
 
 # loss
 AE_LOSS: True
