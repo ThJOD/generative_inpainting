@@ -1,9 +1,9 @@
 # parameters
-DATASET: city #'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
-RANDOM_CROP: True
+DATASET:  'facades_all_tuples' #city #'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
+RANDOM_CROP: False
 VAL: TRUE
-LOG_DIR: full_model_places_256_sn_patch_gan
-MODEL_RESTORE: '' #'20190502082054095172_6ee393d4cfa2_walls_scaled_NORMAL_wgan_gp_full_model_walls_allSets_256' # 'release_places2_256'  # '20180115220926508503_jyugpu0_places2_NORMAL_wgan_gp_full_model'
+LOG_DIR: full_model_facades_fullsize_tuple_randomcrop_sn_patch_gan
+MODEL_RESTORE: '' #'20190523113930616933_ed3f92919415_city_NORMAL_SN_PatchGAN_full_model_places_256_sn_patch_gan' #'20190502082054095172_6ee393d4cfa2_walls_scaled_NORMAL_wgan_gp_full_model_walls_allSets_256' # 'release_places2_256'  # '20180115220926508503_jyugpu0_places2_NORMAL_wgan_gp_full_model'
 
 GAN: 'SN_PatchGAN' #'wgan_gp'  # 'dcgan', 'lsgan', 'wgan_gp', 'one_wgan_gp'
 PRETRAIN_COARSE_NETWORK: False
@@ -74,6 +74,10 @@ DATA_FLIST:
     'data_flist/train_shuffled_city.flist',
     'data_flist/validation_shuffled_city.flist',
   ]
+  facades_all_tuples: [
+    'data_flist/train_facades_fullsize_tuple_shuffled.flist',
+    'data_flist/val_facades_fullsize_tuple_shuffled.flist'
+  ]
 
 STATIC_VIEW_SIZE: 30
 IMG_SHAPES: [256, 256, 3]
@@ -82,7 +86,7 @@ HEIGHT: 128
 WIDTH: 128
 MAX_DELTA_HEIGHT: 32
 MAX_DELTA_WIDTH: 32
-BATCH_SIZE: 12
+BATCH_SIZE: 8
 VERTICAL_MARGIN: 0
 HORIZONTAL_MARGIN: 0
 

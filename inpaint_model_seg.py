@@ -385,7 +385,7 @@ class InpaintCAModel(Model):
             scalar_summary('losses/l1_loss', losses['l1_loss'])
             scalar_summary('losses/l1_loss_x1', losses['l1_loss_x1'])
             scalar_summary('losses/l1_loss_x2', losses['l1_loss_x2'])
-            viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete,x1,x2]
+            viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete,tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1.,x1,x2]
             if offset_flow is not None:
                 viz_img.append(
                     resize(offset_flow, scale=4,
@@ -490,7 +490,7 @@ class InpaintCAModel(Model):
         # apply mask and reconstruct
         batch_complete = batch_predicted*mask + batch_pos_img*(1.-mask)
         # global image visualization
-        viz_img = [batch_pos[:,:,:,0:3], batch_incomplete[:,:,:,0:3], batch_complete, x1, x2]
+        viz_img = [batch_pos[:,:,:,0:3], batch_incomplete[:,:,:,0:3], batch_complete,tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1., x1, x2]
         if offset_flow is not None:
             viz_img.append(
                 resize(offset_flow, scale=4,

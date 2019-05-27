@@ -163,16 +163,20 @@ class DataFromFNamesCatIds(Dataset):
                 random_h = None
                 random_w = None
                 for i in range(len(filenames)):
-                    img, error = self.read_img(filenames[i]) #Put one hot encoding here
+                    img, error = self.read_img(filenames[i]) 
                     if i == 1:
                         img = img[:,:,0:1]
                     if self.random_crop:
+                        
                         img, random_h, random_w = np_random_crop(
                             img, tuple(self.shapes[i][:-1]),
                             random_h, random_w, align=False)  # use last rand
                     else:
-                        img = cv2.resize(img, tuple(self.shapes[i][:-1][::-1]))
-                    
+                        if i == 1:
+                            img = cv2.resize(img, tuple(self.shapes[i][:-1][::-1]),interpolation = cv2.INTER_NEAREST)    
+                        else:
+                            img = cv2.resize(img, tuple(self.shapes[i][:-1][::-1]))
+                        img = img.reshape(self.shapes[i])
                     imgs.append(img)
             if self.return_fnames:
                 batch_data.append(imgs + list(filenames))

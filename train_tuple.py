@@ -46,7 +46,7 @@ if __name__ == "__main__":
         fnames = tupleList
 
     data = DataFromFNamesCatIds(
-        fnames, [config.IMG_SHAPES,config.SEG_SHAPES],dtypes=[tf.float32,tf.uint8], random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=256,nthreads=8)
+        fnames, [config.IMG_SHAPES,config.SEG_SHAPES],dtypes=[tf.float32,tf.uint8], random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128,nthreads=4)
     images = data.data_pipeline(config.BATCH_SIZE)
     # main model
     model = InpaintCAModel()
@@ -67,7 +67,7 @@ if __name__ == "__main__":
             static_fnames = val_fnames[i:i+1]
             static_images = DataFromFNamesCatIds(
                 static_fnames, [config.IMG_SHAPES,config.SEG_SHAPES],dtypes=[tf.float32,tf.uint8], nthreads=1,
-                random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=256).data_pipeline(1)
+                random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128).data_pipeline(1)
             static_inpainted_images = model.build_static_infer_graph(
                 static_images, config, name='static_view/%d' % i)
     # training settings
