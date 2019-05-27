@@ -41,12 +41,17 @@ if __name__ == "__main__":
         fnames = f.read().splitlines()
         tupleList = []
         for line in fnames:
-            files = line.split(';')
-            tupleList.append((files[0],files[1]))
+            if config.SEGMENTATION:
+                files = line.split(';')
+                tupleList.append((files[0],files[1]))
+            else:
+                tupleList.append(line)
         fnames = tupleList
 
+    shapes = [config.IMG_SHAPES,config.SEG_SHAPES] if config.SEGMENTATION else config.IMG_SHAPES
+    types = [tf.float32,tf.uint8] if config.SEGMENTATION else tf.float32
     data = DataFromFNamesCatIds(
-        fnames, [config.IMG_SHAPES,config.SEG_SHAPES],dtypes=[tf.float32,tf.uint8], random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128,nthreads=4)
+        fnames, shapes ,dtypes=[tf.float32,tf.uint8],dtypes=types , random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128,nthreads=4,segmentation = config.SEGMENTATION)
     images = data.data_pipeline(config.BATCH_SIZE)
     # main model
     model = InpaintCAModel()
@@ -59,15 +64,18 @@ if __name__ == "__main__":
             val_fnames = f.read().splitlines()
             tupleList = []
             for line in val_fnames:
-                files = line.split(';')
-                tupleList.append((files[0],files[1]))
+                if config.SEGMENTATION:
+                    files = line.split(';')
+                    tupleList.append((files[0],files[1]))
+            else:
+                tupleList.append(line)
             val_fnames = tupleList
         # progress monitor by visualizing static images
         for i in range(config.STATIC_VIEW_SIZE):
             static_fnames = val_fnames[i:i+1]
             static_images = DataFromFNamesCatIds(
-                static_fnames, [config.IMG_SHAPES,config.SEG_SHAPES],dtypes=[tf.float32,tf.uint8], nthreads=1,
-                random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128).data_pipeline(1)
+                static_fnames, shapes,dtypes=types, nthreads=1,
+                random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128, segmentation=config.SEGMENTATION).data_pipeline(1)
             static_inpainted_images = model.build_static_infer_graph(
                 static_images, config, name='static_view/%d' % i)
     # training settings

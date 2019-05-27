@@ -58,7 +58,7 @@ class DataFromFNamesCatIds(Dataset):
     def __init__(self, fnamelists, shapes, random=False, random_crop=False,
                  fn_preprocess=None, dtypes=tf.float32,
                  enqueue_size=32, queue_size=256, nthreads=16,
-                 return_fnames=False, filetype='image'):
+                 return_fnames=False, filetype='image', segmentation=True):
         self.fnamelists_ = self.process_fnamelists(fnamelists)
         self.file_length = len(self.fnamelists_)
         self.random = random
@@ -84,6 +84,7 @@ class DataFromFNamesCatIds(Dataset):
         self.queue_size = queue_size
         self.nthreads = nthreads
         self.fn_preprocess = fn_preprocess
+        self.segmentation = segmentation
         if not random:
             self.index = 0
         super().__init__()
@@ -164,7 +165,7 @@ class DataFromFNamesCatIds(Dataset):
                 random_w = None
                 for i in range(len(filenames)):
                     img, error = self.read_img(filenames[i]) 
-                    if i == 1:
+                    if i == 1 and self.segmentation:
                         img = img[:,:,0:1]
                     if self.random_crop:
                         
@@ -172,7 +173,7 @@ class DataFromFNamesCatIds(Dataset):
                             img, tuple(self.shapes[i][:-1]),
                             random_h, random_w, align=False)  # use last rand
                     else:
-                        if i == 1:
+                        if i == 1 and self.segmentation:
                             img = cv2.resize(img, tuple(self.shapes[i][:-1][::-1]),interpolation = cv2.INTER_NEAREST)    
                         else:
                             img = cv2.resize(img, tuple(self.shapes[i][:-1][::-1]))

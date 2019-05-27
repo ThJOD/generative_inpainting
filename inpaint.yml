@@ -6,6 +6,9 @@ LOG_DIR: full_model_facades_fullsize_tuple_randomcrop_sn_patch_gan
 MODEL_RESTORE: '' #'20190523113930616933_ed3f92919415_city_NORMAL_SN_PatchGAN_full_model_places_256_sn_patch_gan' #'20190502082054095172_6ee393d4cfa2_walls_scaled_NORMAL_wgan_gp_full_model_walls_allSets_256' # 'release_places2_256'  # '20180115220926508503_jyugpu0_places2_NORMAL_wgan_gp_full_model'
 
 GAN: 'SN_PatchGAN' #'wgan_gp'  # 'dcgan', 'lsgan', 'wgan_gp', 'one_wgan_gp'
+MASK: "BERLIN_RANDOM"
+SEGMENTATION: True #Set to true if you provide a segmentation mask with the image. The segmentation mask should have the values 0 to SEGMENTATION_CLASSES - 1
+SEGMENTATION_CLASSES: 8
 PRETRAIN_COARSE_NETWORK: False
 GAN_LOSS_ALPHA: 0.001  # dcgan: 0.0008, wgan: 0.0005, onegan: 0.001
 WGAN_GP_LAMBDA: 10
