@@ -16,7 +16,7 @@ from neuralgym.ops.gan_ops import random_interpolates
 from inpaint_ops import gated_conv, gen_deconv, dis_conv, gen_conv,gated_deconv, sn_conv
 from inpaint_ops import random_bbox, bbox2mask, local_patch,strokeMask,RandomMaskGenerator
 from inpaint_ops import spatial_discounting_mask
-from inpaint_ops import resize_mask_like, contextual_attention
+from inpaint_ops import resize_mask_like,resize_mask_scale, contextual_attention
 from gan_loss import gan_sn_patch_gan_loss
 
 
@@ -54,7 +54,7 @@ class InpaintCAModel(Model):
             x = gen_conv(x, 4*cnum, 3, 2, name='conv4_downsample')
             x = gen_conv(x, 4*cnum, 3, 1, name='conv5')
             x = gen_conv(x, 4*cnum, 3, 1, name='conv6')
-            mask_s = resize_mask_like(mask, x)
+            mask_s = resize_mask_scale(mask, 1./4.)
             x = gen_conv(x, 4*cnum, 3, rate=2, name='conv7_atrous')
             x = gen_conv(x, 4*cnum, 3, rate=4, name='conv8_atrous')
             x = gen_conv(x, 4*cnum, 3, rate=8, name='conv9_atrous')
@@ -138,7 +138,7 @@ class InpaintCAModel(Model):
             x = gated_conv(x, 4*cnum, 3, 2, name='conv4_downsample')
             x = gated_conv(x, 4*cnum, 3, 1, name='conv5')
             x = gated_conv(x, 4*cnum, 3, 1, name='conv6')
-            mask_s = resize_mask_like(mask, x)
+            mask_s = resize_mask_scale(mask, 1./4.)
             x = gated_conv(x, 4*cnum, 3, rate=2, name='conv7_atrous')
             x = gated_conv(x, 4*cnum, 3, rate=4, name='conv8_atrous')
             x = gated_conv(x, 4*cnum, 3, rate=8, name='conv9_atrous')
@@ -156,7 +156,8 @@ class InpaintCAModel(Model):
             # stage2, paste result as input
             # x = tf.stop_gradient(x)
             x = x*mask + xin[:,:,:,0:3]*(1.-mask)
-            if config.SEGMENTATION:
+            #print(xin.shape[-1])
+            if xin.shape[-1] > 3:
                 x = tf.concat([x,xin[:,:,:,3:]],axis=3)
             x.set_shape(xin.get_shape().as_list())
             # conv branch
@@ -546,20 +547,27 @@ class InpaintCAModel(Model):
         batch_complete = batch_predict*masks + batch_incomplete*(1-masks)
         return batch_complete
 
-    def build_server_graph_gated(self, batch_data, reuse=False, is_training=False):
+    def build_server_graph_gated(self, batch_data,split,segmentation = False, reuse=False, is_training=False):
         """
         """
         # generate mask, 1 represents masked point
-        batch_raw, masks_raw = tf.split(batch_data, 2, axis=2)
-        masks = tf.cast(masks_raw[0:1, :, :, 0:1] > 127.5, tf.float32)
+        if segmentation:
+            batch_raw,mask_raw, batch_pos_seg = tf.split(batch_data,split, axis=3)
+        else:
+            batch_raw,mask_raw = tf.split(batch_data, split, axis=3)
+        
+        mask = tf.cast(mask_raw[0:1, :, :, 0:1] > 127.5, tf.float32)
 
         batch_pos = batch_raw / 127.5 - 1.
-        batch_incomplete = batch_pos * (1. - masks)
+        batch_incomplete = batch_pos * (1. - mask)
+        if segmentation:
+            #batch_pos_seg = tf.one_hot(batch_data[2],segmentation_classes,axis=3,on_value=1.0)
+            batch_incomplete = tf.concat([batch_incomplete, batch_pos_seg],axis=3)
         # inpaint
         x1, x2, flow = self.build_inpaint_net_gated(
-            batch_incomplete, masks, reuse=reuse, training=is_training,
+            batch_incomplete, mask, reuse=reuse, training=is_training,
             config=None)
         batch_predict = x2
         # apply mask and reconstruct
-        batch_complete = batch_predict*masks + batch_incomplete*(1-masks)
+        batch_complete = batch_predict*mask + batch_incomplete[:,:,:,0:3]*(1-mask)
         return batch_complete

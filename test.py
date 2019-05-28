@@ -6,7 +6,7 @@ import tensorflow as tf
 import neuralgym as ng
 import os
 
-from inpaint_model import InpaintCAModel
+from inpaint_model_seg import InpaintCAModel
 
 
 parser = argparse.ArgumentParser()
@@ -22,6 +22,9 @@ parser.add_argument('--segmentationClasses', default=8, type=int,
                     help='How many segmentation classes there are.')
 parser.add_argument('--checkpoint_dir', default='', type=str,
                     help='The directory of tensorflow checkpoint.')
+parser.add_argument('--resize', default=False, type=bool,
+                    help='Weather to resize images to 255,255.')
+
 
 
 if __name__ == "__main__":
@@ -47,16 +50,26 @@ if __name__ == "__main__":
         for root, dirs, files in os.walk(args.image, topdown=False):
             files.sort()
             for name in files:
-                image.append(cv2.imread(os.path.join(root,name)))
+                img = cv2.imread(os.path.join(root,name))
+                if args.resize:
+                    img = cv2.resize(img,(256,256),interpolation = cv2.INTER_NEAREST)
+                image.append(img)
         for root, dirs, files in os.walk(args.mask, topdown=False):
             files.sort()
             for name in files:
-                mask.append(cv2.imread(os.path.join(root,name)))
+                img = cv2.imread(os.path.join(root,name))
+                if args.resize:
+                    img = cv2.resize(img,(256,256),interpolation = cv2.INTER_NEAREST)
+                mask.append(img)
+                #mask.append(cv2.resize(cv2.imread(os.path.join(root,name)),(256,256),interpolation = cv2.INTER_NEAREST))
         if segmentation:
             for root, dirs, files in os.walk(args.segmentation, topdown=False):
                 files.sort()
                 for name in files:
-                    segmentations.append(cv2.imread(os.path.join(root,name))[:,:,0:1])
+                    img = cv2.imread(os.path.join(root,name))
+                    if args.resize:
+                        img = cv2.resize(img,(256,256),interpolation = cv2.INTER_NEAREST)
+                    segmentations.append(img[:,:,0:1])
             assert len(image) == len(segmentations)
         assert len(image) == len(mask)
         
@@ -78,10 +91,13 @@ if __name__ == "__main__":
             mask[idx] = mask[idx][:h//grid*grid, :w//grid*grid, :]
             if segmentation:
                 segmentations[idx] = segmentations[idx][:h//grid*grid, :w//grid*grid, :]
-                segmentations[idx] = np.expand_dims(segmentations[idx], 0)
+                segmentations[idx] = np.expand_dims(segmentations[idx], 0).reshape((1,segmentations[idx].shape[0],segmentations[idx].shape[1]))
             print('Shape of image: {}'.format(image[idx].shape))
             image[idx] = np.expand_dims(image[idx], 0)
             mask[idx] = np.expand_dims(mask[idx], 0)
+
+            #print(image[idx].shape)
+            #print(mask[idx].shape)
     else:
         h, w, _ = image.shape
         grid = 8
@@ -94,14 +110,18 @@ if __name__ == "__main__":
 
         image = np.expand_dims(image, 0)
         mask = np.expand_dims(mask, 0)
-    input_image = np.concatenate([image, mask], axis=2)
-
+        #print(image.shape)
+        #print(mask.shape)
+    #input_image = np.concatenate([image, mask], axis=2)
+    
     #sess_config = tf.ConfigProto()
     sess_config = tf.ConfigProto(        device_count = {'GPU': 0}    )
     sess_config.gpu_options.allow_growth = True
     with tf.Session(config=sess_config) as sess:
-        input_image = tf.constant(input_image, dtype=tf.float32)
-        output = model.build_server_graph_gated(input_image)
+        #input_image = tf.constant(input_image, dtype=tf.float32)
+        input_image_ph = tf.placeholder(tf.float32, shape=(1, None, None, 3 + 3 + args.segmentationClasses if segmentation else 3 + 3 ))
+        split = [3,3,args.segmentationClasses] if segmentation else [3,3]
+        output = model.build_server_graph_gated(input_image_ph,split,segmentation=segmentation)
         output = (output + 1.) * 127.5
         output = tf.reverse(output, [-1])
         output = tf.saturate_cast(output, tf.uint8)
@@ -115,5 +135,16 @@ if __name__ == "__main__":
             assign_ops.append(tf.assign(var, var_value))
         sess.run(assign_ops)
         print('Model loaded.')
-        result = sess.run(output)
-        cv2.imwrite(args.output, result[0][:, :, ::-1])
+        for idx in range(len(image)):
+            images = image[idx]
+            inputList = [image[idx],mask[idx]]
+            if segmentation:
+                segmentation_hot = tf.one_hot(segmentations[idx], args.segmentationClasses,axis=3,on_value=1.0)
+                inputList.append(segmentation_hot.eval())
+            #print(image[idx].shape)
+            #print(mask[idx].shape)
+            #print(segmentation_hot.shape)
+            #print(inputList)
+            inputList = np.concatenate(inputList,axis=3)
+            result = sess.run(output, feed_dict={input_image_ph: inputList})
+            cv2.imwrite(os.path.join(args.output, str(idx) + '.png') , result[0][:, :, ::-1])
