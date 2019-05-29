@@ -22,10 +22,10 @@ parser.add_argument('--segmentationClasses', default=8, type=int,
                     help='How many segmentation classes there are.')
 parser.add_argument('--checkpoint_dir', default='', type=str,
                     help='The directory of tensorflow checkpoint.')
-parser.add_argument('--resize', default=False, type=bool,
-                    help='Weather to resize images to 255,255.')
-
-
+parser.add_argument('--resize', dest='resize', action='store_true')
+parser.add_argument('--stacked', dest='stacked', action='store_true')
+parser.set_defaults(resize=False)
+parser.set_defaults(stacked=False)
 
 if __name__ == "__main__":
     #ng.get_gpus(1)
@@ -145,6 +145,12 @@ if __name__ == "__main__":
             #print(mask[idx].shape)
             #print(segmentation_hot.shape)
             #print(inputList)
-            inputList = np.concatenate(inputList,axis=3)
-            result = sess.run(output, feed_dict={input_image_ph: inputList})
+            inputArray = np.concatenate(inputList,axis=3)
+            result = sess.run(output, feed_dict={input_image_ph: inputArray})
+            if args.stacked:
+                resultList = [image[idx][:,:,:,::-1],image[idx][:,:,:,::-1] * (1. - mask[idx])]
+                if segmentation:
+                    resultList.append(((tf.cast(tf.tile(segmentations[idx],[1,1,1,3]),tf.float32)) / 4.0 - 1.).eval())
+                resultList.append(result)
+                result = np.concatenate(resultList,axis = 2)
             cv2.imwrite(os.path.join(args.output, str(idx) + '.png') , result[0][:, :, ::-1])

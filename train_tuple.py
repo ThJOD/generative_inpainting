@@ -32,10 +32,10 @@ def multigpu_graph_def(model, data, config, gpu_id=0, loss_type='g'):
 
 if __name__ == "__main__":
     config = ng.Config('inpaint.yml')
-    #if config.GPU_ID != -1:
-    #    ng.set_gpus(config.GPU_ID)
-    #else:
-    #    ng.get_gpus(config.NUM_GPUS)
+    if config.GPU_ID != -1:
+        ng.set_gpus(config.GPU_ID)
+    else:
+        ng.get_gpus(config.NUM_GPUS)
     # training data
     with open(config.DATA_FLIST[config.DATASET][0]) as f:
         fnames = f.read().splitlines()
@@ -48,10 +48,10 @@ if __name__ == "__main__":
                 tupleList.append(line)
         fnames = tupleList
 
-    shapes = [config.IMG_SHAPES,config.SEG_SHAPES] if config.SEGMENTATION else config.IMG_SHAPES
+    shapes = [config.IMG_SHAPES,config.SEG_SHAPES] if config.SEGMENTATION else [config.IMG_SHAPES]
     types = [tf.float32,tf.uint8] if config.SEGMENTATION else tf.float32
     data = DataFromFNamesCatIds(
-        fnames, shapes ,dtypes=[tf.float32,tf.uint8],dtypes=types , random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128,nthreads=4,segmentation = config.SEGMENTATION)
+        fnames, shapes ,dtypes=types , random_crop=config.RANDOM_CROP,enqueue_size=16, queue_size=128,nthreads=4,segmentation = config.SEGMENTATION)
     images = data.data_pipeline(config.BATCH_SIZE)
     # main model
     model = InpaintCAModel()

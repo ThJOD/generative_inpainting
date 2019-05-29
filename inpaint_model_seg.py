@@ -157,9 +157,9 @@ class InpaintCAModel(Model):
             # x = tf.stop_gradient(x)
             x = x*mask + xin[:,:,:,0:3]*(1.-mask)
             #print(xin.shape[-1])
-            if xin.shape[-1] > 3:
-                x = tf.concat([x,xin[:,:,:,3:]],axis=3)
-            x.set_shape(xin.get_shape().as_list())
+            #if xin.shape[-1] > 3:
+            #    x = tf.concat([x,xin[:,:,:,3:]],axis=3)
+            x.set_shape(xin[:,:,:,0:3].get_shape().as_list())
             # conv branch
             xnow = tf.concat([x, ones_x, ones_x*mask], axis=3)
             x = gated_conv(xnow, cnum, 5, 1, name='xconv1')
@@ -396,7 +396,9 @@ class InpaintCAModel(Model):
             viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete]
             if config.SEGMENTATION:
                 viz_img.append(tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1.)
-            viz_img.append([x1,x2])
+            viz_img.append(x1)
+            viz_img.append(x2)
+
             if offset_flow is not None:
                 viz_img.append(
                     resize(offset_flow, scale=4,
@@ -510,7 +512,8 @@ class InpaintCAModel(Model):
         viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete]
         if config.SEGMENTATION:
             viz_img.append(tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1.)
-        viz_img.append([x1,x2])
+        viz_img.append(x1)
+        viz_img.append(x2)
         if offset_flow is not None:
             viz_img.append(
                 resize(offset_flow, scale=4,
