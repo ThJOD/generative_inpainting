@@ -92,6 +92,7 @@ if __name__ == "__main__":
             if segmentation:
                 segmentations[idx] = segmentations[idx][:h//grid*grid, :w//grid*grid, :]
                 segmentations[idx] = np.expand_dims(segmentations[idx], 0).reshape((1,segmentations[idx].shape[0],segmentations[idx].shape[1]))
+                print('Shape of seg: {}'.format(segmentations[idx].shape))
             print('Shape of image: {}'.format(image[idx].shape))
             image[idx] = np.expand_dims(image[idx], 0)
             mask[idx] = np.expand_dims(mask[idx], 0)
@@ -104,8 +105,8 @@ if __name__ == "__main__":
         image = image[:h//grid*grid, :w//grid*grid, :]
         mask = mask[:h//grid*grid, :w//grid*grid, :]
         if segmentation:
-                    segmentations = segmentations[:h//grid*grid, :w//grid*grid, :]
-
+            segmentations = segmentations[:h//grid*grid, :w//grid*grid, :]
+            
         print('Shape of image: {}'.format(image.shape))
 
         image = np.expand_dims(image, 0)
@@ -139,8 +140,11 @@ if __name__ == "__main__":
             images = image[idx]
             inputList = [image[idx],mask[idx]]
             if segmentation:
+                print(segmentations[idx].shape)
                 segmentation_hot = tf.one_hot(segmentations[idx], args.segmentationClasses,axis=3,on_value=1.0)
+                print(segmentations[idx].shape)
                 inputList.append(segmentation_hot.eval())
+                print(segmentation_hot.eval().shape)
             #print(image[idx].shape)
             #print(mask[idx].shape)
             #print(segmentation_hot.shape)
@@ -150,6 +154,7 @@ if __name__ == "__main__":
             if args.stacked:
                 resultList = [image[idx][:,:,:,::-1],image[idx][:,:,:,::-1] * (1. - mask[idx])]
                 if segmentation:
+                    print(segmentations[idx].shape)
                     resultList.append(((tf.cast(tf.tile(segmentations[idx],[1,1,1,3]),tf.float32)) / 4.0 - 1.).eval())
                 resultList.append(result)
                 result = np.concatenate(resultList,axis = 2)
