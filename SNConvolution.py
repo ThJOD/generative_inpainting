@@ -46,8 +46,8 @@ class SNConvolution2D():
         self.dilation = dilation
         self.name = name
         self.Ip = Ip
-        self.w = tf.get_variable(name + "_kernel", shape=[ksize, ksize, x.get_shape()[-1], cnum], initializer=tf.random_normal_initializer(mean=0.0, stddev=0.02),regularizer=None)
-        self.b = tf.get_variable(name + "_bias", [cnum], initializer=tf.constant_initializer(0.0))
+        self.w = tf.get_variable(name + "_kernel", shape=[ksize, ksize, x.get_shape()[-1], cnum], initializer=tf.random_normal_initializer(mean=0.0, stddev=0.02),regularizer=None,trainable=training)
+        self.b = tf.get_variable(name + "_bias", [cnum], initializer=tf.constant_initializer(0.0),trainable=training)
         self.u = tf.get_variable(name + "_u", [1, cnum], initializer=tf.random_normal_initializer(), trainable=False)
         self.stride = stride
         self.padding = padding
