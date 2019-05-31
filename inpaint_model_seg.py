@@ -264,6 +264,38 @@ class InpaintCAModel(Model):
             x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv6', training=training,sn=False)
             x = tf.nn.leaky_relu(x)
             return x
+
+
+    def build_MarkovPatchGan_discriminator_withoutSN(self, x,mask, reuse=False, training=True):
+        with tf.variable_scope('discriminator', reuse=reuse):
+            cnum = 64
+            ones_x = tf.ones_like(x)[:, :, :, 0:1]
+            x = tf.concat([x, ones_x, ones_x*mask], axis=3)
+            
+            tf.layers.conv2d(x, filters=cnum,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv1')
+            x = tf.layers.batch_normalization(x)
+            x = tf.nn.leaky_relu(x)
+            
+            tf.layers.conv2d(x, filters=cnum * 2,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv2')
+            x = tf.layers.batch_normalization(x)
+            x = tf.nn.leaky_relu(x)
+
+            tf.layers.conv2d(x, filters=cnum * 4,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv3')
+            x = tf.layers.batch_normalization(x)
+            x = tf.nn.leaky_relu(x)
+
+            tf.layers.conv2d(x, filters=cnum * 8,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv4')
+            x = tf.layers.batch_normalization(x)
+            x = tf.nn.leaky_relu(x)
+
+            tf.layers.conv2d(x, filters=cnum * 8,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv5')
+            x = tf.layers.batch_normalization(x)
+            x = tf.nn.leaky_relu(x)
+
+            tf.layers.conv2d(x,filters=1,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv6')
+            x = tf.nn.sigmoid(x)
+
+            return x
             
 
     def build_graph_with_losses(self, batch_data, config, training=True,
@@ -435,8 +467,10 @@ class InpaintCAModel(Model):
             losses['l1_loss_x2'] = tf.reduce_mean(tf.abs(batch_pos_img - x2))
             losses['l1_loss'] = losses['l1_loss_x1'] + losses['l1_loss_x2']
             # seperate gan
-            if config.SKIP_SN:
+            if 'SKIP_SN' in config.GAN_SPEC:
                 pos_neg_global = self.build_SNPatchGan_discriminator_withoutSN(batch_pos_neg,mask, training=training, reuse=reuse)
+            elif 'MARKOV' in config.GAN_SPEC:
+                pos_neg_global = self.build_MarkovPatchGan_discriminator_withoutSN(batch_pos_neg,mask, training=training, reuse=reuse)
             else:
                 pos_neg_global = self.build_SNPatchGan_discriminator(batch_pos_neg,mask, training=training, reuse=reuse)
             pos_global, neg_global = tf.split(pos_neg_global, 2)

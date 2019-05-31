@@ -2,13 +2,13 @@
 DATASET:  'facades_all_FullSize' #'facades_all_tuples' #city #'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
 RANDOM_CROP: False
 VAL: TRUE
-LOG_DIR: full_model_facades_fullsize_tuple_randomcrop_sn_patch_gan_x1pretrain
+LOG_DIR: full_model_facades_fullsize_sn_patch_markov
 MODEL_RESTORE: '' #'20190529035650577410_6dcdb4e882b5_facades_all_tuples_NORMAL_SN_PatchGAN_full_model_facades_fullsize_tuple_randomcrop_sn_patch_gan_x1pretrain' #'20190523113930616933_ed3f92919415_city_NORMAL_SN_PatchGAN_full_model_places_256_sn_patch_gan' #'20190502082054095172_6ee393d4cfa2_walls_scaled_NORMAL_wgan_gp_full_model_walls_allSets_256' # 'release_places2_256'  # '20180115220926508503_jyugpu0_places2_NORMAL_wgan_gp_full_model'
 
 GAN: 'SN_PatchGAN' #'SN_PatchGAN' #'wgan_gp'  # 'dcgan', 'lsgan', 'wgan_gp', 'one_wgan_gp'
 MASK:  'BERLIN_RANDOM' #"BERLIN_RANDOM" # 'BBOX' , 'STROKE'
 GATED: True
-SKIP_SN: True
+GAN_SPEC: 'MARKOV'
 SEGMENTATION: False #Set to true if you provide a segmentation mask with the image. The segmentation mask should have the values 0 to SEGMENTATION_CLASSES - 1
 SEGMENTATION_CLASSES: 8
 PRETRAIN_COARSE_NETWORK: False
