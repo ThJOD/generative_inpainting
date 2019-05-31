@@ -79,3 +79,18 @@ class SNConvolution2D():
             padding = 'VALID'
         x = tf.nn.conv2d(input=self.input, filter=self.W_bar(), strides=self.stride, dilations=self.dilation, padding=self.padding, name=self.name)
         return x
+
+    def conv_noSN(self):
+        """Applies the convolution layer.
+        Args:
+            x (~chainer.Variable): Input image.
+        Returns:
+            ~chainer.Variable: Output of the convolution.
+        """
+        assert self.padding in ['SYMMETRIC', 'SAME', 'REFELECT']
+        if self.padding == 'SYMMETRIC' or self.padding == 'REFELECT':
+            p = int(1*(self.ksize-1)/2)
+            self.input = tf.pad(self.input , [[0,0], [p, p], [p, p], [0,0]], mode=self.padding)
+            padding = 'VALID'
+        x = tf.nn.conv2d(input=self.input, filter=self.w, strides=self.stride, dilations=self.dilation, padding=self.padding, name=self.name)
+        return x

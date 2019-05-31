@@ -42,11 +42,11 @@ if __name__ == "__main__":
         tupleList = []
         for line in fnames:
             if config.SEGMENTATION:
-                files = line.split(';')
-                tupleList.append((files[0],files[1]))
-            else:
-                tupleList.append(line)
-        fnames = tupleList
+                tupleList = []
+                for line in fnames:
+                    files = line.split(';')
+                    tupleList.append((files[0],files[1]))
+                fnames = tupleList
 
     shapes = [config.IMG_SHAPES,config.SEG_SHAPES] if config.SEGMENTATION else [config.IMG_SHAPES]
     types = [tf.float32,tf.uint8] if config.SEGMENTATION else tf.float32
@@ -62,14 +62,12 @@ if __name__ == "__main__":
     if config.VAL:
         with open(config.DATA_FLIST[config.DATASET][1]) as f:
             val_fnames = f.read().splitlines()
-            tupleList = []
-            for line in val_fnames:
-                if config.SEGMENTATION:
+            if config.SEGMENTATION:
+                tupleList = []
+                for line in val_fnames:
                     files = line.split(';')
                     tupleList.append((files[0],files[1]))
-            else:
-                tupleList.append(line)
-            val_fnames = tupleList
+                val_fnames = tupleList
         # progress monitor by visualizing static images
         for i in range(config.STATIC_VIEW_SIZE):
             static_fnames = val_fnames[i:i+1]

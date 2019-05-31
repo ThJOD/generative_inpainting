@@ -153,7 +153,7 @@ def dis_conv(x, cnum, ksize=5, stride=2, name='conv', training=True):
 
 #https://github.com/pfnet-research/sngan_projection/blob/master/source/links/sn_convolution_2d.py
 @add_arg_scope
-def sn_conv(x, cnum, ksize=5, stride=2, name='conv', training=True):
+def sn_conv(x, cnum, ksize=5, stride=2, name='conv', training=True,sn=True):
     """Define conv for discriminator.
     Activation is set to leaky_relu.
 
@@ -169,7 +169,10 @@ def sn_conv(x, cnum, ksize=5, stride=2, name='conv', training=True):
         tf.Tensor: output
     """
     conv = SNConvolution2D(x, cnum, ksize, stride,  (1,1,1,1), name, training, 'SAME', 1)
-    x = conv.conv()
+    if sn:
+        x = conv.conv()
+    else:
+        x = conv.conv_noSN()
     x = tf.nn.leaky_relu(x)
     return x
 

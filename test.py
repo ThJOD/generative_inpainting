@@ -24,6 +24,8 @@ parser.add_argument('--checkpoint_dir', default='', type=str,
                     help='The directory of tensorflow checkpoint.')
 parser.add_argument('--resize', dest='resize', action='store_true')
 parser.add_argument('--stacked', dest='stacked', action='store_true')
+parser.add_argument('--notgated', dest='gated', action='store_false')
+parser.set_defaults(gated=True)
 parser.set_defaults(resize=False)
 parser.set_defaults(stacked=False)
 
@@ -122,7 +124,7 @@ if __name__ == "__main__":
         #input_image = tf.constant(input_image, dtype=tf.float32)
         input_image_ph = tf.placeholder(tf.float32, shape=(1, None, None, 3 + 3 + args.segmentationClasses if segmentation else 3 + 3 ))
         split = [3,3,args.segmentationClasses] if segmentation else [3,3]
-        output = model.build_server_graph_gated(input_image_ph,split,segmentation=segmentation)
+        output = model.build_server_graph_gated(input_image_ph,split,segmentation=segmentation,gated=gated)
         output = (output + 1.) * 127.5
         output = tf.reverse(output, [-1])
         output = tf.saturate_cast(output, tf.uint8)

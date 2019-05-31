@@ -245,6 +245,25 @@ class InpaintCAModel(Model):
             x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv6', training=training)
             x = tf.nn.leaky_relu(x)
             return x
+
+    def build_SNPatchGan_discriminator_withoutSN(self, x,mask, reuse=False, training=True):
+        with tf.variable_scope('discriminator', reuse=reuse):
+            cnum = 64
+            ones_x = tf.ones_like(x)[:, :, :, 0:1]
+            x = tf.concat([x, ones_x, ones_x*mask], axis=3)
+            x =  sn_conv(x, cnum, ksize=5, stride=(1,1,1,1), name='conv1', training=training,sn=False)
+            x = tf.nn.leaky_relu(x)
+            x =  sn_conv(x, cnum * 2, ksize=5, stride=(1,2,2,1), name='conv2', training=training,sn=False)
+            x = tf.nn.leaky_relu(x)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv3', training=training,sn=False)
+            x = tf.nn.leaky_relu(x)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv4', training=training,sn=False)
+            x = tf.nn.leaky_relu(x)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv5', training=training,sn=False)
+            x = tf.nn.leaky_relu(x)
+            x =  sn_conv(x, cnum * 4, ksize=5, stride=(1,2,2,1), name='conv6', training=training,sn=False)
+            x = tf.nn.leaky_relu(x)
+            return x
             
 
     def build_graph_with_losses(self, batch_data, config, training=True,
@@ -282,16 +301,17 @@ class InpaintCAModel(Model):
             losses['ae_loss'] += tf.reduce_mean(tf.abs(batch_pos - x2) * (1.-mask))
         losses['ae_loss'] /= tf.reduce_mean(1.-mask)
         if summary:
-            scalar_summary('losses/l1_loss', losses['l1_loss'])
-            scalar_summary('losses/ae_loss', losses['ae_loss'])
-            viz_img = [batch_pos, batch_incomplete, batch_complete]
-            if offset_flow is not None:
-                viz_img.append(
-                    resize(offset_flow, scale=4,
-                           func=tf.image.resize_nearest_neighbor))
-            images_summary(
-                tf.concat(viz_img, axis=2),
-                'raw_incomplete_predicted_complete', config.VIZ_MAX_OUT)
+            with tf.device('/cpu:0'):
+                scalar_summary('losses/l1_loss', losses['l1_loss'])
+                scalar_summary('losses/ae_loss', losses['ae_loss'])
+                viz_img = [batch_pos, batch_incomplete, batch_complete]
+                if offset_flow is not None:
+                    viz_img.append(
+                        resize(offset_flow, scale=4,
+                            func=tf.image.resize_nearest_neighbor))
+                images_summary(
+                    tf.concat(viz_img, axis=2),
+                    'raw_incomplete_predicted_complete', config.VIZ_MAX_OUT)
 
         # gan
         #Why are batch and predicted batch concatenated??? I do not see where the discriminator seperates it
@@ -323,24 +343,26 @@ class InpaintCAModel(Model):
             losses['gp_loss'] = config.WGAN_GP_LAMBDA * (penalty_local + penalty_global)
             losses['d_loss'] = losses['d_loss'] + losses['gp_loss']
             if summary and not config.PRETRAIN_COARSE_NETWORK:
-                gradients_summary(g_loss_local, batch_predicted, name='g_loss_local')
-                gradients_summary(g_loss_global, batch_predicted, name='g_loss_global')
-                scalar_summary('convergence/d_loss', losses['d_loss'])
-                scalar_summary('convergence/local_d_loss', d_loss_local)
-                scalar_summary('convergence/global_d_loss', d_loss_global)
-                scalar_summary('gan_wgan_loss/gp_loss', losses['gp_loss'])
-                scalar_summary('gan_wgan_loss/gp_penalty_local', penalty_local)
-                scalar_summary('gan_wgan_loss/gp_penalty_global', penalty_global)
+                with tf.device('/cpu:0'):
+                    gradients_summary(g_loss_local, batch_predicted, name='g_loss_local')
+                    gradients_summary(g_loss_global, batch_predicted, name='g_loss_global')
+                    scalar_summary('convergence/d_loss', losses['d_loss'])
+                    scalar_summary('convergence/local_d_loss', d_loss_local)
+                    scalar_summary('convergence/global_d_loss', d_loss_global)
+                    scalar_summary('gan_wgan_loss/gp_loss', losses['gp_loss'])
+                    scalar_summary('gan_wgan_loss/gp_penalty_local', penalty_local)
+                    scalar_summary('gan_wgan_loss/gp_penalty_global', penalty_global)
 
         if summary and not config.PRETRAIN_COARSE_NETWORK:
             # summary the magnitude of gradients from different losses w.r.t. predicted image
-            gradients_summary(losses['g_loss'], batch_predicted, name='g_loss')
-            gradients_summary(losses['g_loss'], x1, name='g_loss_to_x1')
-            gradients_summary(losses['g_loss'], x2, name='g_loss_to_x2')
-            gradients_summary(losses['l1_loss'], x1, name='l1_loss_to_x1')
-            gradients_summary(losses['l1_loss'], x2, name='l1_loss_to_x2')
-            gradients_summary(losses['ae_loss'], x1, name='ae_loss_to_x1')
-            gradients_summary(losses['ae_loss'], x2, name='ae_loss_to_x2')
+            with tf.device('/cpu:0'):
+                gradients_summary(losses['g_loss'], batch_predicted, name='g_loss')
+                gradients_summary(losses['g_loss'], x1, name='g_loss_to_x1')
+                gradients_summary(losses['g_loss'], x2, name='g_loss_to_x2')
+                gradients_summary(losses['l1_loss'], x1, name='l1_loss_to_x1')
+                gradients_summary(losses['l1_loss'], x2, name='l1_loss_to_x2')
+                gradients_summary(losses['ae_loss'], x1, name='ae_loss_to_x1')
+                gradients_summary(losses['ae_loss'], x2, name='ae_loss_to_x2')
         if config.PRETRAIN_COARSE_NETWORK:
             losses['g_loss'] = 0
         else:
@@ -364,18 +386,28 @@ class InpaintCAModel(Model):
             batch_pos_seg = tf.one_hot(tf.reshape(batch_data[1][:,:,:,0:1],batch_data[1].shape[:-1]),config.SEGMENTATION_CLASSES,axis=3,on_value=1.0)
             batch_pos =  tf.concat([batch_pos_img,batch_pos_seg],axis=3)
         else:
-            batch_pos = batch_data[0] / 127.5 - 1.
+            batch_pos = batch_data / 127.5 - 1.
             batch_pos_img = batch_pos
-        
+
+
+        if config.MASK == 'BERLIN_RANDOM':
+            mask = RandomMaskGenerator(config, name='mask_c')
+        elif config.MASK == 'BBOX':
+            bbox = random_bbox(config)
+            mask = bbox2mask(bbox, config, name='mask_c')
+        elif config.MASK == 'STROKE':
+            mask = strokeMask(config, name='mask_c')
         # generate mask, 1 represents masked point
-        mask = RandomMaskGenerator(config, name='mask_c')
         #mask = strokeMask(config, name='mask_c')
         batch_incomplete = batch_pos_img*(1.-mask)
         if config.SEGMENTATION:
             batch_incomplete = tf.concat([batch_incomplete,batch_pos_seg],axis=3)
-        x1, x2, offset_flow = self.build_inpaint_net_gated(
-            batch_incomplete, mask, config, reuse=reuse, training=training,
-            padding=config.PADDING)
+        if config.GATED:
+            x1, x2, offset_flow = self.build_inpaint_net_gated(
+                batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING)
+        else: 
+            x1, x2, offset_flow = self.build_inpaint_net(
+                batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING)
         if config.PRETRAIN_COARSE_NETWORK:
             batch_predicted = x1
             logger.info('Set batch_predicted to x1.')
@@ -386,26 +418,8 @@ class InpaintCAModel(Model):
         # apply mask and complete image
         batch_complete = batch_predicted*mask + batch_pos_img*(1.-mask)
         #Now l1_loss is just an l1_loss over the whole image
-        losses['l1_loss_x1'] = tf.reduce_mean(tf.abs(batch_pos_img - x1))
-        losses['l1_loss_x2'] = tf.reduce_mean(tf.abs(batch_pos_img - x2))
-        losses['l1_loss'] = losses['l1_loss_x1'] + losses['l1_loss_x2']
-        if summary:
-            scalar_summary('losses/l1_loss', losses['l1_loss'])
-            scalar_summary('losses/l1_loss_x1', losses['l1_loss_x1'])
-            scalar_summary('losses/l1_loss_x2', losses['l1_loss_x2'])
-            viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete]
-            if config.SEGMENTATION:
-                viz_img.append(tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1.)
-            viz_img.append(x1)
-            viz_img.append(x2)
-
-            if offset_flow is not None:
-                viz_img.append(
-                    resize(offset_flow, scale=4,
-                           func=tf.image.resize_nearest_neighbor))
-            images_summary(
-                tf.concat(viz_img, axis=2),
-                'raw_incomplete_predicted_complete', config.VIZ_MAX_OUT)
+        
+        
         if config.SEGMENTATION:
             batch_complete = tf.concat([batch_complete,batch_pos_seg],axis=3)   
         # gan
@@ -417,8 +431,14 @@ class InpaintCAModel(Model):
                 batch_pos_neg = tf.concat([batch_complete, batch_pos], axis=0)
         # wgan with gradient penalty
         if config.GAN == 'SN_PatchGAN':
+            losses['l1_loss_x1'] = tf.reduce_mean(tf.abs(batch_pos_img - x1))
+            losses['l1_loss_x2'] = tf.reduce_mean(tf.abs(batch_pos_img - x2))
+            losses['l1_loss'] = losses['l1_loss_x1'] + losses['l1_loss_x2']
             # seperate gan
-            pos_neg_global = self.build_SNPatchGan_discriminator(batch_pos_neg,mask, training=training, reuse=reuse)
+            if config.SKIP_SN:
+                pos_neg_global = self.build_SNPatchGan_discriminator_withoutSN(batch_pos_neg,mask, training=training, reuse=reuse)
+            else:
+                pos_neg_global = self.build_SNPatchGan_discriminator(batch_pos_neg,mask, training=training, reuse=reuse)
             pos_global, neg_global = tf.split(pos_neg_global, 2)
             # SN_PatchGAN loss
        
@@ -426,17 +446,94 @@ class InpaintCAModel(Model):
             losses['g_loss'] = config.SNGAN_LOSS_ALPHA * g_loss_global + config.L1_LOSS_ALPHA * losses['l1_loss']
             losses['d_loss'] = d_loss_global
             if summary and not config.PRETRAIN_COARSE_NETWORK:
-                gradients_summary(g_loss_global, batch_predicted, name='g_loss_global')
-                scalar_summary('convergence/d_loss', losses['d_loss'])
-                scalar_summary('convergence/global_d_loss', d_loss_global)
+                with tf.device('/cpu:0'):
+                    gradients_summary(g_loss_global, batch_predicted, name='g_loss_global')
+                    scalar_summary('convergence/d_loss', losses['d_loss'])
+                    scalar_summary('convergence/global_d_loss', d_loss_global)
 
-        if summary and not config.PRETRAIN_COARSE_NETWORK:
-            # summary the magnitude of gradients from different losses w.r.t. predicted image
-            gradients_summary(losses['g_loss'], batch_predicted, name='g_loss')
-            gradients_summary(losses['g_loss'], x1, name='g_loss_to_x1')
-            gradients_summary(losses['g_loss'], x2, name='g_loss_to_x2')
-            gradients_summary(losses['l1_loss'], x1, name='l1_loss_to_x1')
-            gradients_summary(losses['l1_loss'], x2, name='l1_loss_to_x2')
+            if summary and not config.PRETRAIN_COARSE_NETWORK:
+                # summary the magnitude of gradients from different losses w.r.t. predicted image
+                with tf.device('/cpu:0'):
+                    gradients_summary(losses['g_loss'], batch_predicted, name='g_loss')
+                    gradients_summary(losses['g_loss'], x1, name='g_loss_to_x1')
+                    gradients_summary(losses['g_loss'], x2, name='g_loss_to_x2')
+                    gradients_summary(losses['l1_loss'], x1, name='l1_loss_to_x1')
+                    gradients_summary(losses['l1_loss'], x2, name='l1_loss_to_x2')
+                    scalar_summary('losses/l1_loss_x1', losses['l1_loss_x1'])
+                    scalar_summary('losses/l1_loss_x2', losses['l1_loss_x2'])
+
+        # wgan with gradient penalty
+        if config.GAN == 'wgan_gp':
+            local_patch_batch_pos = local_patch(batch_pos, bbox)
+            local_patch_batch_predicted = local_patch(batch_predicted, bbox)
+            local_patch_x1 = local_patch(x1, bbox)
+            local_patch_x2 = local_patch(x2, bbox)
+            local_patch_batch_complete = local_patch(batch_complete, bbox)
+            local_patch_mask = local_patch(mask, bbox)
+            l1_alpha = config.COARSE_L1_ALPHA
+        
+            # local deterministic patch
+            local_patch_batch_pos_neg = tf.concat([local_patch_batch_pos, local_patch_batch_complete], 0)
+
+            # seperate gan
+            losses['l1_loss'] = l1_alpha * tf.reduce_mean(tf.abs(local_patch_batch_pos - local_patch_x1)*spatial_discounting_mask(config))
+            if not config.PRETRAIN_COARSE_NETWORK:
+                losses['l1_loss'] += tf.reduce_mean(tf.abs(local_patch_batch_pos - local_patch_x2)*spatial_discounting_mask(config))
+            losses['ae_loss'] = l1_alpha * tf.reduce_mean(tf.abs(batch_pos - x1) * (1.-mask))
+            if not config.PRETRAIN_COARSE_NETWORK:
+                losses['ae_loss'] += tf.reduce_mean(tf.abs(batch_pos - x2) * (1.-mask))
+            losses['ae_loss'] /= tf.reduce_mean(1.-mask)
+            if summary:
+                with tf.device('/cpu:0'):
+                    scalar_summary('losses/l1_loss', losses['l1_loss'])
+                    scalar_summary('losses/ae_loss', losses['ae_loss'])
+            pos_neg_local, pos_neg_global = self.build_wgan_discriminator(local_patch_batch_pos_neg, batch_pos_neg, training=training, reuse=reuse)
+            pos_local, neg_local = tf.split(pos_neg_local, 2)
+            pos_global, neg_global = tf.split(pos_neg_global, 2)
+            # wgan loss
+            g_loss_local, d_loss_local = gan_wgan_loss(pos_local, neg_local, name='gan/local_gan')
+            g_loss_global, d_loss_global = gan_wgan_loss(pos_global, neg_global, name='gan/global_gan')
+            losses['g_loss'] = config.GLOBAL_WGAN_LOSS_ALPHA * g_loss_global + g_loss_local
+            losses['d_loss'] = d_loss_global + d_loss_local
+            # gp
+            interpolates_local = random_interpolates(local_patch_batch_pos, local_patch_batch_complete)
+            interpolates_global = random_interpolates(batch_pos, batch_complete)
+            dout_local, dout_global = self.build_wgan_discriminator(
+                interpolates_local, interpolates_global, reuse=True)
+            # apply penalty
+            penalty_local = gradients_penalty(interpolates_local, dout_local, mask=local_patch_mask)
+            penalty_global = gradients_penalty(interpolates_global, dout_global, mask=mask)
+            losses['gp_loss'] = config.WGAN_GP_LAMBDA * (penalty_local + penalty_global)
+            losses['d_loss'] = losses['d_loss'] + losses['gp_loss']
+            if summary and not config.PRETRAIN_COARSE_NETWORK:
+                with tf.device('/cpu:0'):
+                    gradients_summary(g_loss_local, batch_predicted, name='g_loss_local')
+                    gradients_summary(g_loss_global, batch_predicted, name='g_loss_global')
+                    scalar_summary('convergence/d_loss', losses['d_loss'])
+                    scalar_summary('convergence/local_d_loss', d_loss_local)
+                    scalar_summary('convergence/global_d_loss', d_loss_global)
+                    scalar_summary('gan_wgan_loss/gp_loss', losses['gp_loss'])
+                    scalar_summary('gan_wgan_loss/gp_penalty_local', penalty_local)
+                    scalar_summary('gan_wgan_loss/gp_penalty_global', penalty_global)
+        
+
+        if summary:
+            with tf.device('/cpu:0'):
+                scalar_summary('losses/l1_loss', losses['l1_loss'])
+                viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete[:,:,:,0:3]]
+                if config.SEGMENTATION:
+                    viz_img.append(tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1.)
+                viz_img.append(x1)
+                viz_img.append(x2)
+
+                if offset_flow is not None:
+                    viz_img.append(
+                        resize(offset_flow, scale=4,
+                            func=tf.image.resize_nearest_neighbor))
+                images_summary(
+                    tf.concat(viz_img, axis=2),
+                    'raw_incomplete_predicted_complete', config.VIZ_MAX_OUT)
+
         g_vars = tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES, 'inpaint_net')
         d_vars = tf.get_collection(
@@ -467,69 +564,117 @@ class InpaintCAModel(Model):
         # apply mask and reconstruct
         batch_complete = batch_predicted*mask + batch_incomplete*(1.-mask)
         # global image visualization
-        viz_img = [batch_pos, batch_incomplete, batch_complete]
-        if offset_flow is not None:
-            viz_img.append(
-                resize(offset_flow, scale=4,
-                       func=tf.image.resize_nearest_neighbor))
-        images_summary(
-            tf.concat(viz_img, axis=2),
-            name+'_raw_incomplete_complete', config.VIZ_MAX_OUT)
+        with tf.device('/cpu:0'):
+            viz_img = [batch_pos, batch_incomplete, batch_complete]
+            if offset_flow is not None:
+                viz_img.append(
+                    resize(offset_flow, scale=4,
+                        func=tf.image.resize_nearest_neighbor))
+            images_summary(
+                tf.concat(viz_img, axis=2),
+                name+'_raw_incomplete_complete', config.VIZ_MAX_OUT)
         return batch_complete
 
-    def build_infer_graph_gated(self, batch_data, config, mask=None, name='val'):
+    def build_infer_graph_gated(self, batch_data, config, mask=None,bbox = None, name='val',summary = True):
         """
         """
         config.MAX_DELTA_HEIGHT = 0
         config.MAX_DELTA_WIDTH = 0
-        if mask is None:
-            mask = RandomMaskGenerator(config, name='mask_c')
-            #mask = strokeMask(config, name='mask_c')
+        
+
         if config.SEGMENTATION:
             batch_pos_img = batch_data[0] / 127.5 - 1.
             batch_pos_seg = tf.one_hot(tf.reshape(batch_data[1][:,:,:,0:1],batch_data[1].shape[:-1]),config.SEGMENTATION_CLASSES,axis=3,on_value=1.0)
             batch_pos =  tf.concat([batch_pos_img,batch_pos_seg],axis=3)
         else:
-            batch_pos = batch_data[0] / 127.5 - 1.
+            batch_pos = batch_data / 127.5 - 1.
             batch_pos_img = batch_pos
+
         edges = None
         batch_incomplete = batch_pos_img*(1.-mask)
         if config.SEGMENTATION:
             batch_incomplete = tf.concat([batch_incomplete,batch_pos_seg],axis=3)
         # inpaint
-        x1, x2, offset_flow = self.build_inpaint_net_gated(
-            batch_incomplete, mask, config, reuse=True,
-            training=False, padding=config.PADDING)
+        if config.GATED:
+            x1, x2, offset_flow = self.build_inpaint_net_gated(
+                batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING)
+        else: 
+            x1, x2, offset_flow = self.build_inpaint_net(
+                batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING)
+        
         if config.PRETRAIN_COARSE_NETWORK:
             batch_predicted = x1
             logger.info('Set batch_predicted to x1.')
         else:
             batch_predicted = x2
             logger.info('Set batch_predicted to x2.')
-        # apply mask and reconstruct
+        
         batch_complete = batch_predicted*mask + batch_pos_img*(1.-mask)
+
+        if summary:
+            with tf.device('/cpu:0'):
+                losses = {}
+                if config.GAN == 'SN_PatchGAN':
+                    losses['l1_loss_x1'] = tf.reduce_mean(tf.abs(batch_pos_img - x1))
+                    losses['l1_loss_x2'] = tf.reduce_mean(tf.abs(batch_pos_img - x2))
+                    losses['l1_loss'] = losses['l1_loss_x1'] + losses['l1_loss_x2']
+                    scalar_summary('val_losses/l1_loss_x1', losses['l1_loss_x1'])
+                    scalar_summary('val_losses/l1_loss_x2', losses['l1_loss_x2'])
+                    scalar_summary('val_losses/l1_loss', losses['l1_loss'])
+                if config.GAN == 'wgan_gp':
+                    local_patch_batch_pos = local_patch(batch_pos, bbox)
+                    local_patch_batch_predicted = local_patch(batch_predicted, bbox)
+                    local_patch_x1 = local_patch(x1, bbox)
+                    local_patch_x2 = local_patch(x2, bbox)
+                    local_patch_batch_complete = local_patch(batch_complete, bbox)
+                    local_patch_mask = local_patch(mask, bbox)
+                    l1_alpha = config.COARSE_L1_ALPHA
+                
+                    # local deterministic patch
+                    local_patch_batch_pos_neg = tf.concat([local_patch_batch_pos, local_patch_batch_complete], 0)
+
+                    # seperate gan
+                    losses['l1_loss'] = l1_alpha * tf.reduce_mean(tf.abs(local_patch_batch_pos - local_patch_x1)*spatial_discounting_mask(config))
+                    if not config.PRETRAIN_COARSE_NETWORK:
+                        losses['l1_loss'] += tf.reduce_mean(tf.abs(local_patch_batch_pos - local_patch_x2)*spatial_discounting_mask(config))
+                    losses['ae_loss'] = l1_alpha * tf.reduce_mean(tf.abs(batch_pos - x1) * (1.-mask))
+                    if not config.PRETRAIN_COARSE_NETWORK:
+                        losses['ae_loss'] += tf.reduce_mean(tf.abs(batch_pos - x2) * (1.-mask))
+                    losses['ae_loss'] /= tf.reduce_mean(1.-mask)
+                    scalar_summary('val_losses/l1_loss', losses['l1_loss'])
+                    scalar_summary('val_losses/ae_loss', losses['ae_loss'])
+
+
+        # apply mask and reconstruct
         # global image visualization
-        viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete]
-        if config.SEGMENTATION:
-            viz_img.append(tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1.)
-        viz_img.append(x1)
-        viz_img.append(x2)
-        if offset_flow is not None:
-            viz_img.append(
-                resize(offset_flow, scale=4,
-                       func=tf.image.resize_nearest_neighbor))
-        images_summary(
-            tf.concat(viz_img, axis=2),
-            name+'_raw_incomplete_complete', config.VIZ_MAX_OUT)
+        with tf.device('/cpu:0'):
+            viz_img = [batch_pos_img, batch_incomplete[:,:,:,0:3], batch_complete]
+            if config.SEGMENTATION:
+                viz_img.append(tf.cast(tf.tile(batch_data[1],[1,1,1,3]),tf.float32) / 4.0 - 1.)
+            viz_img.append(x1)
+            viz_img.append(x2)
+            if offset_flow is not None:
+                viz_img.append(
+                    resize(offset_flow, scale=4,
+                        func=tf.image.resize_nearest_neighbor))
+            images_summary(
+                tf.concat(viz_img, axis=2),
+                name+'_raw_incomplete_complete', config.VIZ_MAX_OUT)
         return batch_complete
 
     def build_static_infer_graph(self, batch_data, config, name):
         """
         """
         # generate mask, 1 represents masked point
-        mask = RandomMaskGenerator(config, name='mask_c')
-        #mask = strokeMask(config, name='mask_c')
-        return self.build_infer_graph_gated(batch_data, config, mask, name)
+        bbox = None
+        if config.MASK == 'BERLIN_RANDOM':
+            mask = RandomMaskGenerator(config, name='mask_c')
+        elif config.MASK == 'BBOX':
+            bbox = random_bbox(config)
+            mask = bbox2mask(bbox, config, name='mask_c')
+        elif config.MASK == 'STROKE':
+            mask = strokeMask(config, name='mask_c')
+        return self.build_infer_graph_gated(batch_data, config, mask,bbox, name)
 
 
     def build_server_graph(self, batch_data, reuse=False, is_training=False):
@@ -550,7 +695,7 @@ class InpaintCAModel(Model):
         batch_complete = batch_predict*masks + batch_incomplete*(1-masks)
         return batch_complete
 
-    def build_server_graph_gated(self, batch_data,split,segmentation = False, reuse=False, is_training=False):
+    def build_server_graph_gated(self, batch_data,split,segmentation = False, reuse=False, is_training=False,gated = True):
         """
         """
         # generate mask, 1 represents masked point
@@ -570,6 +715,13 @@ class InpaintCAModel(Model):
         x1, x2, flow = self.build_inpaint_net_gated(
             batch_incomplete, mask, reuse=reuse, training=is_training,
             config=None)
+        if gated:
+            x1, x2, offset_flow = self.build_inpaint_net_gated(
+                batch_incomplete, mask,  reuse=reuse, training=is_training)
+        else: 
+            x1, x2, offset_flow = self.build_inpaint_net(
+                batch_incomplete, mask, reuse=reuse, training=is_training)
+        
         batch_predict = x2
         # apply mask and reconstruct
         batch_complete = batch_predict*mask + batch_incomplete[:,:,:,0:3]*(1-mask)
