@@ -112,7 +112,7 @@ class InpaintCAModel(Model):
         return x_stage1, x_stage2, offset_flow
 
     def build_inpaint_net_gated(self, x, mask, config=None, reuse=False,
-                          training=True, padding='SAME', name='inpaint_net'):
+                          training=True, padding='SAME', name='inpaint_net',x2seg = False):
         """Inpaint network.
 
         Args:
@@ -157,9 +157,11 @@ class InpaintCAModel(Model):
             # x = tf.stop_gradient(x)
             x = x*mask + xin[:,:,:,0:3]*(1.-mask)
             #print(xin.shape[-1])
-            if xin.shape[-1] > 3:
+            if xin.shape[-1] > 3 and x2seg:
                 x = tf.concat([x,xin[:,:,:,3:]],axis=3)
-            x.set_shape(xin.get_shape().as_list())
+                x.set_shape(xin.get_shape().as_list())
+            else:
+                x.set_shape(xin[:,:,:,0:3].get_shape().as_list())
             # conv branch
             xnow = tf.concat([x, ones_x, ones_x*mask], axis=3)
             x = gated_conv(xnow, cnum, 5, 1, name='xconv1')
@@ -272,27 +274,27 @@ class InpaintCAModel(Model):
             ones_x = tf.ones_like(x)[:, :, :, 0:1]
             x = tf.concat([x, ones_x, ones_x*mask], axis=3)
             
-            tf.layers.conv2d(x, filters=cnum,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv1')
+            x = tf.layers.conv2d(x, filters=cnum,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv1')
             x = tf.layers.batch_normalization(x)
             x = tf.nn.leaky_relu(x)
             
-            tf.layers.conv2d(x, filters=cnum * 2,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv2')
+            x = tf.layers.conv2d(x, filters=cnum * 2,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv2')
             x = tf.layers.batch_normalization(x)
             x = tf.nn.leaky_relu(x)
 
-            tf.layers.conv2d(x, filters=cnum * 4,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv3')
+            x = tf.layers.conv2d(x, filters=cnum * 4,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv3')
             x = tf.layers.batch_normalization(x)
             x = tf.nn.leaky_relu(x)
 
-            tf.layers.conv2d(x, filters=cnum * 8,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv4')
+            x = tf.layers.conv2d(x, filters=cnum * 8,kernel_size=4,strides=2,padding='SAME',dilation_rate=1,name='conv4')
             x = tf.layers.batch_normalization(x)
             x = tf.nn.leaky_relu(x)
 
-            tf.layers.conv2d(x, filters=cnum * 8,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv5')
+            x = tf.layers.conv2d(x, filters=cnum * 8,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv5')
             x = tf.layers.batch_normalization(x)
             x = tf.nn.leaky_relu(x)
 
-            tf.layers.conv2d(x,filters=1,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv6')
+            x = tf.layers.conv2d(x,filters=1,kernel_size=4,strides=1,padding='SAME',dilation_rate=1,name='conv6')
             x = tf.nn.sigmoid(x)
 
             return x
@@ -436,7 +438,7 @@ class InpaintCAModel(Model):
             batch_incomplete = tf.concat([batch_incomplete,batch_pos_seg],axis=3)
         if config.GATED:
             x1, x2, offset_flow = self.build_inpaint_net_gated(
-                batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING)
+                batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING, x2seg = config.X2SEG)
         else: 
             x1, x2, offset_flow = self.build_inpaint_net(
                 batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING)
@@ -631,7 +633,7 @@ class InpaintCAModel(Model):
         # inpaint
         if config.GATED:
             x1, x2, offset_flow = self.build_inpaint_net_gated(
-                batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING)
+                batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING,x2seg = config.X2SEG)
         else: 
             x1, x2, offset_flow = self.build_inpaint_net(
                 batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING)
@@ -729,7 +731,7 @@ class InpaintCAModel(Model):
         batch_complete = batch_predict*masks + batch_incomplete*(1-masks)
         return batch_complete
 
-    def build_server_graph_gated(self, batch_data,split,segmentation = False, reuse=False, is_training=False,gated = True):
+    def build_server_graph_gated(self, batch_data,split,segmentation = False, reuse=False, is_training=False,gated = True,x2seg = False):
         """
         """
         # generate mask, 1 represents masked point
@@ -748,7 +750,7 @@ class InpaintCAModel(Model):
         # inpaint
         x1, x2, flow = self.build_inpaint_net_gated(
             batch_incomplete, mask, reuse=reuse, training=is_training,
-            config=None)
+            config=None,x2seg = x2seg)
         if gated:
             x1, x2, offset_flow = self.build_inpaint_net_gated(
                 batch_incomplete, mask,  reuse=reuse, training=is_training)
