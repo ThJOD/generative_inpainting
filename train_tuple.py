@@ -6,7 +6,8 @@ import logging
 import tensorflow as tf
 import neuralgym as ng
 from DataSetSeg import DataFromFNamesCatIds
-
+from trainer import Trainer
+from secondary_trainer import SecondaryTrainer
 from inpaint_model_seg import InpaintCAModel
 
 
@@ -94,7 +95,7 @@ if __name__ == "__main__":
         config.GAN,config.LOG_DIR])
     # train discriminator with secondary trainer, should initialize before
     # primary trainer.
-    discriminator_training_callback = ng.callbacks.SecondaryTrainer(
+    discriminator_training_callback = SecondaryTrainer(
         pstep=1,
         optimizer=d_optimizer,
         var_list=d_vars,
@@ -104,7 +105,7 @@ if __name__ == "__main__":
             'model': model, 'data': data, 'config': config, 'loss_type': 'd'},
     )
     # train generator with primary trainer
-    trainer = ng.train.Trainer(
+    trainer = Trainer(
         optimizer=g_optimizer,
         var_list=g_vars,
         max_iters=config.MAX_ITERS,
