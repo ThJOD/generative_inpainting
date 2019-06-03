@@ -17,7 +17,7 @@ from inpaint_ops import gated_conv, gen_deconv, dis_conv, gen_conv,gated_deconv,
 from inpaint_ops import random_bbox, bbox2mask, local_patch,strokeMask,RandomMaskGenerator
 from inpaint_ops import spatial_discounting_mask
 from inpaint_ops import resize_mask_like,resize_mask_scale, contextual_attention
-from gan_loss import gan_sn_patch_gan_loss
+from gan_loss import gan_sn_patch_gan_loss , conv2d_spectral_norm
 
 
 logger = logging.getLogger()
@@ -248,6 +248,25 @@ class InpaintCAModel(Model):
             x = tf.nn.leaky_relu(x)
             return x
 
+    def build_SNPatchGan_discriminator_NG(self, x,mask, reuse=False, training=True):
+        with tf.variable_scope('discriminator', reuse=reuse):
+            cnum = 64
+            ones_x = tf.ones_like(x)[:, :, :, 0:1]
+            x = tf.concat([x, ones_x, ones_x*mask], axis=3)
+            x =  conv2d_spectral_norm(x, cnum, kernel_size=5, strides=(1,1), name='conv1', trainable=training)
+            x = tf.nn.leaky_relu(x)
+            x =  conv2d_spectral_norm(x, cnum * 2, kernel_size=5, strides=(2,2), name='conv2', trainable=training)
+            x = tf.nn.leaky_relu(x)
+            x =  conv2d_spectral_norm(x, cnum * 4, kernel_size=5, strides=(2,2), name='conv3', trainable=training)
+            x = tf.nn.leaky_relu(x)
+            x =  conv2d_spectral_norm(x, cnum * 4, kernel_size=5, strides=(2,2), name='conv4', trainable=training)
+            x = tf.nn.leaky_relu(x)
+            x =  conv2d_spectral_norm(x, cnum * 4, kernel_size=5, strides=(2,2), name='conv5', trainable=training)
+            x = tf.nn.leaky_relu(x)
+            x =  conv2d_spectral_norm(x, cnum * 4, kernel_size=5, strides=(2,2), name='conv6', trainable=training)
+            x = tf.nn.leaky_relu(x)
+            return x
+
     def build_SNPatchGan_discriminator_withoutSN(self, x,mask, reuse=False, training=True):
         with tf.variable_scope('discriminator', reuse=reuse):
             cnum = 64
@@ -473,6 +492,8 @@ class InpaintCAModel(Model):
                 pos_neg_global = self.build_SNPatchGan_discriminator_withoutSN(batch_pos_neg,mask, training=training, reuse=reuse)
             elif 'MARKOV' in config.GAN_SPEC:
                 pos_neg_global = self.build_MarkovPatchGan_discriminator_withoutSN(batch_pos_neg,mask, training=training, reuse=reuse)
+            elif 'NG' in config.GAN_SPEC:
+                pos_neg_global = self.build_SNPatchGan_discriminator_NG(batch_pos_neg,mask, training=training, reuse=reuse)
             else:
                 pos_neg_global = self.build_SNPatchGan_discriminator(batch_pos_neg,mask, training=training, reuse=reuse)
             pos_global, neg_global = tf.split(pos_neg_global, 2)

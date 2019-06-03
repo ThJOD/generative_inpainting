@@ -1,15 +1,15 @@
 # parameters
-DATASET: 'facades_all_tuples' # 'facades_all_FullSize' #'facades_all_tuples' #city #'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
+DATASET: 'facades_all_FullSize' # 'facades_all_FullSize' #'facades_all_tuples' #city #'facades_all' #'walls_scaled' #'facades_all', 'facades_scaled' ,'celebahq' , 'tmnist', 'dtd', 'places2', 'celeba', 'imagenet', 'cityscapes' , 'facades'
 RANDOM_CROP: False
 VAL: TRUE
-LOG_DIR: facades_fullsize_sn_patch_markov_segmentation_x2noseg
+LOG_DIR: facades_fullsize_sn_patch_NG
 MODEL_RESTORE: '' #'20190529035650577410_6dcdb4e882b5_facades_all_tuples_NORMAL_SN_PatchGAN_full_model_facades_fullsize_tuple_randomcrop_sn_patch_gan_x1pretrain' #'20190523113930616933_ed3f92919415_city_NORMAL_SN_PatchGAN_full_model_places_256_sn_patch_gan' #'20190502082054095172_6ee393d4cfa2_walls_scaled_NORMAL_wgan_gp_full_model_walls_allSets_256' # 'release_places2_256'  # '20180115220926508503_jyugpu0_places2_NORMAL_wgan_gp_full_model'
 
 GAN: 'SN_PatchGAN' #'SN_PatchGAN' #'wgan_gp'  # 'dcgan', 'lsgan', 'wgan_gp', 'one_wgan_gp'
-MASK:  'BERLIN_RANDOM' #"BERLIN_RANDOM" # 'BBOX' , 'STROKE'
+MASK:  'STROKE' #"BERLIN_RANDOM" # 'BBOX' , 'STROKE'
 GATED: True
-GAN_SPEC: 'MARKOV'
-SEGMENTATION: True #Set to true if you provide a segmentation mask with the image. The segmentation mask should have the values 0 to SEGMENTATION_CLASSES - 1
+GAN_SPEC: 'NG'
+SEGMENTATION: False #Set to true if you provide a segmentation mask with the image. The segmentation mask should have the values 0 to SEGMENTATION_CLASSES - 1
 X2SEG: False # Weather the segmentation information should be fed to the x2 stage as input or not
 SEGMENTATION_CLASSES: 8
 PRETRAIN_COARSE_NETWORK: False
@@ -32,7 +32,7 @@ VIZ_MAX_OUT: 10
 GRADS_SUMMARY: True
 GRADIENT_CLIP: False
 GRADIENT_CLIP_VALUE: 0.1
-VAL_PSTEPS: 1000
+VAL_PSTEPS: 100
 
 # data
 DATA_FLIST:
