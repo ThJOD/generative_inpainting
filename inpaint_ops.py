@@ -151,6 +151,9 @@ def dis_conv(x, cnum, ksize=5, stride=2, name='conv', training=True):
     x = tf.nn.leaky_relu(x)
     return x
 
+
+
+
 #https://github.com/pfnet-research/sngan_projection/blob/master/source/links/sn_convolution_2d.py
 @add_arg_scope
 def sn_conv(x, cnum, ksize=5, stride=2, name='conv', training=True,sn=True):
@@ -381,7 +384,11 @@ def contextual_attention(f, b, mask=None, ksize=3, stride=1, rate=1,
     # extract patches from background with stride and rate
     kernel = 2*rate
     raw_w = tf.extract_image_patches(
-        b, [1,kernel,kernel,1], [1,rate*stride,rate*stride,1], [1,1,1,1], padding='SAME')
+        b, [1,kernel,kernel,1], [1,rate*stride,rate*stride,1], [1,1,1,1], padding='SAME') 
+    #b has shape [batch,height,width,channels] the output will have shape [batch,rows_of_patches, collumns_of_patches, kernel_width * kernel_width * channels] https://stackoverflow.com/questions/40731433/understanding-tf-extract-image-patches-for-extracting-patches-from-an-image
+    #rows_of_patches is how many rows in b can be used for patches. It depends on height and kernel_height and stride_height and the padding mode
+    #collumns_of_patches is how many cols in b can be used for patches. It depends on width and kernel_width and stride_width and the padding mode
+    
     raw_w = tf.reshape(raw_w, [raw_int_bs[0], -1, kernel, kernel, raw_int_bs[3]])
     raw_w = tf.transpose(raw_w, [0, 2, 3, 4, 1])  # transpose to b*k*k*c*hw
     # downscaling foreground option: downscaling both foreground and

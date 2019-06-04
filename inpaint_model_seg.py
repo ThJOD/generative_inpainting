@@ -4,6 +4,7 @@ import logging
 import cv2
 import neuralgym as ng
 import tensorflow as tf
+import numpy as np
 from tensorflow.contrib.framework.python.ops import arg_scope
 
 from neuralgym.models import Model
@@ -252,7 +253,7 @@ class InpaintCAModel(Model):
         with tf.variable_scope('discriminator', reuse=reuse):
             cnum = 64
             ones_x = tf.ones_like(x)[:, :, :, 0:1]
-            x = tf.concat([x, ones_x, ones_x*mask], axis=3)
+            x = tf.concat([x, ones_x*mask], axis=3)
             x =  conv2d_spectral_norm(x, cnum, kernel_size=5, strides=(1,1), name='conv1', trainable=training)
             x = tf.nn.leaky_relu(x)
             x =  conv2d_spectral_norm(x, cnum * 2, kernel_size=5, strides=(2,2), name='conv2', trainable=training)
@@ -264,7 +265,6 @@ class InpaintCAModel(Model):
             x =  conv2d_spectral_norm(x, cnum * 4, kernel_size=5, strides=(2,2), name='conv5', trainable=training)
             x = tf.nn.leaky_relu(x)
             x =  conv2d_spectral_norm(x, cnum * 4, kernel_size=5, strides=(2,2), name='conv6', trainable=training)
-            x = tf.nn.leaky_relu(x)
             return x
 
     def build_SNPatchGan_discriminator_withoutSN(self, x,mask, reuse=False, training=True):
@@ -477,11 +477,11 @@ class InpaintCAModel(Model):
             batch_complete = tf.concat([batch_complete,batch_pos_seg],axis=3)   
         # gan
         
-        if not config.RANDOM_LABELFLIP:
+        
+        if config.RANDOM_LABELFLIP and np.random.uniform(0.0,1.0) < config.LABELFLIP_PROB:
+            batch_pos_neg = tf.concat([batch_complete, batch_pos], axis=0)
+        else: 
             batch_pos_neg = tf.concat([batch_pos, batch_complete], axis=0)
-        else:
-            if tf.random.uniform([1],0.0,1.0) < config.LABELFLIP_PROB:
-                batch_pos_neg = tf.concat([batch_complete, batch_pos], axis=0)
         # wgan with gradient penalty
         if config.GAN == 'SN_PatchGAN':
             losses['l1_loss_x1'] = tf.reduce_mean(tf.abs(batch_pos_img - x1))
