@@ -113,7 +113,7 @@ class InpaintCAModel(Model):
         return x_stage1, x_stage2, offset_flow
 
     def build_inpaint_net_gated(self, x, mask, config=None, reuse=False,
-                          training=True, padding='SAME', name='inpaint_net',x2seg = False):
+                          training=True, padding='SAME', name='inpaint_net',x2seg = False, skipConnections=False):
         """Inpaint network.
 
         Args:
@@ -133,24 +133,32 @@ class InpaintCAModel(Model):
                 arg_scope([gated_conv, gated_deconv, gen_conv],
                           training=training, padding=padding):
             # stage1
-            x = gated_conv(x, cnum, 5, 1, name='conv1')
-            x = gated_conv(x, 2*cnum, 3, 2, name='conv2_downsample')
-            x = gated_conv(x, 2*cnum, 3, 1, name='conv3')
-            x = gated_conv(x, 4*cnum, 3, 2, name='conv4_downsample')
-            x = gated_conv(x, 4*cnum, 3, 1, name='conv5')
-            x = gated_conv(x, 4*cnum, 3, 1, name='conv6')
+            x1 = gated_conv(x, cnum, 5, 1, name='conv1')
+            x2 = gated_conv(x1, 2*cnum, 3, 2, name='conv2_downsample')
+            x3 = gated_conv(x2, 2*cnum, 3, 1, name='conv3')
+            x4 = gated_conv(x3, 4*cnum, 3, 2, name='conv4_downsample')
+            x5 = gated_conv(x4, 4*cnum, 3, 1, name='conv5')
+            x6 = gated_conv(x5, 4*cnum, 3, 1, name='conv6')
             mask_s = resize_mask_scale(mask, 1./4.)
-            x = gated_conv(x, 4*cnum, 3, rate=2, name='conv7_atrous')
-            x = gated_conv(x, 4*cnum, 3, rate=4, name='conv8_atrous')
-            x = gated_conv(x, 4*cnum, 3, rate=8, name='conv9_atrous')
-            x = gated_conv(x, 4*cnum, 3, rate=16, name='conv10_atrous')
-            x = gated_conv(x, 4*cnum, 3, 1, name='conv11')
-            x = gated_conv(x, 4*cnum, 3, 1, name='conv12')
-            x = gated_deconv(x, 2*cnum, name='conv13_upsample')
-            x = gated_conv(x, 2*cnum, 3, 1, name='conv14')
-            x = gated_deconv(x, cnum, name='conv15_upsample')
-            x = gated_conv(x, cnum//2, 3, 1, name='conv16')
-            x = gen_conv(x, 3, 3, 1, activation=tf.nn.tanh, name='conv17')
+            x7 = gated_conv(x6, 4*cnum, 3, rate=2, name='conv7_atrous')
+            x8 = gated_conv(x7, 4*cnum, 3, rate=4, name='conv8_atrous')
+            x9 = gated_conv(x8, 4*cnum, 3, rate=8, name='conv9_atrous')
+            x10 = gated_conv(x9, 4*cnum, 3, rate=16, name='conv10_atrous')
+            x11 = gated_conv(x10, 4*cnum, 3, 1, name='conv11')
+            x12 = gated_conv(x11, 4*cnum, 3, 1, name='conv12')
+            x13 = gated_deconv(x12, 2*cnum, name='conv13_upsample')
+            if skipConnections:
+                print('skip')
+                x13 = tf.concat([x13,x3],axis=3)
+            x14 = gated_conv(x13, 2*cnum, 3, 1, name='conv14')
+            
+
+            x15 = gated_deconv(x14, cnum, name='conv15_upsample')
+            if skipConnections:
+                print('skip')
+                x15 = tf.concat([x15,x1],axis=3)
+            x16 = gated_conv(x15, cnum//2, 3, 1, name='conv16')
+            x = gen_conv(x16, 3, 3, 1, activation=tf.nn.tanh, name='conv17')
             x_stage1 = x
             # return x_stage1, None, None
 
@@ -457,7 +465,7 @@ class InpaintCAModel(Model):
             batch_incomplete = tf.concat([batch_incomplete,batch_pos_seg],axis=3)
         if config.GATED:
             x1, x2, offset_flow = self.build_inpaint_net_gated(
-                batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING, x2seg = config.X2SEG)
+                batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING, x2seg = config.X2SEG, skipConnections= config.SKIPCONNECTIONS)
         else: 
             x1, x2, offset_flow = self.build_inpaint_net(
                 batch_incomplete, mask, config, reuse=reuse, training=training, padding=config.PADDING)
@@ -654,7 +662,7 @@ class InpaintCAModel(Model):
         # inpaint
         if config.GATED:
             x1, x2, offset_flow = self.build_inpaint_net_gated(
-                batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING,x2seg = config.X2SEG)
+                batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING,x2seg = config.X2SEG, skipConnections= config.SKIPCONNECTIONS)
         else: 
             x1, x2, offset_flow = self.build_inpaint_net(
                 batch_incomplete, mask, config, reuse=True, training=False, padding=config.PADDING)
@@ -752,7 +760,7 @@ class InpaintCAModel(Model):
         batch_complete = batch_predict*masks + batch_incomplete*(1-masks)
         return batch_complete
 
-    def build_server_graph_gated(self, batch_data,split,segmentation = False, reuse=False, is_training=False,gated = True,x2seg = False):
+    def build_server_graph_gated(self, batch_data,split,segmentation = False, reuse=False, is_training=False,gated = True,x2seg = False,skipCons=False):
         """
         """
         # generate mask, 1 represents masked point
@@ -771,7 +779,7 @@ class InpaintCAModel(Model):
         # inpaint
         x1, x2, flow = self.build_inpaint_net_gated(
             batch_incomplete, mask, reuse=reuse, training=is_training,
-            config=None,x2seg = x2seg)
+            config=None,x2seg = x2seg, skipConnections=skipCons)
         if gated:
             x1, x2, offset_flow = self.build_inpaint_net_gated(
                 batch_incomplete, mask,  reuse=reuse, training=is_training)
