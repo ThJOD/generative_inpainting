@@ -148,14 +148,12 @@ class InpaintCAModel(Model):
             x12 = gated_conv(x11, 4*cnum, 3, 1, name='conv12')
             x13 = gated_deconv(x12, 2*cnum, name='conv13_upsample')
             if skipConnections:
-                print('skip')
                 x13 = tf.concat([x13,x3],axis=3)
             x14 = gated_conv(x13, 2*cnum, 3, 1, name='conv14')
             
 
             x15 = gated_deconv(x14, cnum, name='conv15_upsample')
             if skipConnections:
-                print('skip')
                 x15 = tf.concat([x15,x1],axis=3)
             x16 = gated_conv(x15, cnum//2, 3, 1, name='conv16')
             x = gen_conv(x16, 3, 3, 1, activation=tf.nn.tanh, name='conv17')
@@ -777,12 +775,11 @@ class InpaintCAModel(Model):
             #batch_pos_seg = tf.one_hot(batch_data[2],segmentation_classes,axis=3,on_value=1.0)
             batch_incomplete = tf.concat([batch_incomplete, batch_pos_seg],axis=3)
         # inpaint
-        x1, x2, flow = self.build_inpaint_net_gated(
-            batch_incomplete, mask, reuse=reuse, training=is_training,
-            config=None,x2seg = x2seg, skipConnections=skipCons)
+        
         if gated:
-            x1, x2, offset_flow = self.build_inpaint_net_gated(
-                batch_incomplete, mask,  reuse=reuse, training=is_training)
+            x1, x2, flow = self.build_inpaint_net_gated(
+                batch_incomplete, mask, reuse=reuse, training=is_training,
+                config=None,x2seg = x2seg, skipConnections=skipCons)
         else: 
             x1, x2, offset_flow = self.build_inpaint_net(
                 batch_incomplete, mask, reuse=reuse, training=is_training)
